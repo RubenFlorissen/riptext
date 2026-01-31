@@ -8,7 +8,8 @@ license = { text = "MIT" }
 authors = [{ name = "Ruben" }]
 dependencies = [
 	"rapidfuzz>=3.5",
-	"textual>=0.55",
+	"textual[syntax]>=0.55",
+	"tree-sitter-languages>=1.10.2",
 ]
 
 [project.scripts]

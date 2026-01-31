@@ -21,6 +21,10 @@ class RipCommandProvider(Provider):
         assert isinstance(app, RiptextApp)
         return app
 
+    async def startup(self) -> None:
+        """Reload scripts when command palette opens."""
+        self._app().reload_scripts()
+
     async def discover(self) -> Hits:
         app = self._app()
         for script in app.scripts_for_commands():
