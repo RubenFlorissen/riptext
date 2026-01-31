@@ -14,6 +14,7 @@ from .commands import RipCommandProvider
 from .core.execution import run_script
 from .core.models import ScriptMetadata
 from .core.scripts import ScriptIndex, load_all_scripts
+from .save import handle_save_submit, toggle_save_input
 from .selection import (
     MODE_LABELS,
     SelectionMode,
@@ -64,6 +65,9 @@ class RiptextApp(App):
         self._debug_keys = os.environ.get("RIPTEXT_DEBUG_KEYS") == "1"
         self._selection_mode: SelectionMode = "full"
 
+    # -------------------------------------------------------------------------
+    # Lifecycle
+    # -------------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
         yield TextArea(id="editor")
@@ -86,32 +90,49 @@ class RiptextApp(App):
         else:
             self._show_mode()
 
-    def _apply_syntax_highlighting(self, editor: TextArea) -> None:
-        """Detect and apply syntax highlighting."""
-        lang = detect_language(self._file_path, editor.text)
-        if lang:
-            editor.language = lang
-        else:
-            editor.language = None
+    # -------------------------------------------------------------------------
+    # Event handlers
+    # -------------------------------------------------------------------------
 
     def on_key(self, event) -> None:  # type: ignore[override]
         if self._debug_keys:
-            key_name = event.key
-            char = event.character or ""
-            self._set_status(f"Key: {key_name} {char}".strip())
+            self._set_status(f"Key: {event.key} {event.character or ''}".strip())
+
+        # Handle Escape in save input
+        save_input = self.query_one("#save-input", Input)
+        if save_input.has_class("visible") and event.key == "escape":
+            save_input.remove_class("visible")
+            self.query_one("#editor", TextArea).focus()
+            self._show_mode()
+            event.prevent_default()
+            event.stop()
 
     def on_text_area_selection_changed(self, event: TextArea.SelectionChanged) -> None:
         """Auto-switch to selection mode when text is selected."""
         sel = event.selection
-        if sel.start != sel.end:
-            if self._selection_mode != "selection":
-                self._selection_mode = "selection"
-                self._show_mode()
-        else:
-            if self._selection_mode == "selection":
-                self._selection_mode = "full"
-                self._show_mode()
+        has_selection = sel.start != sel.end
+        if has_selection and self._selection_mode != "selection":
+            self._selection_mode = "selection"
+            self._show_mode()
+        elif not has_selection and self._selection_mode == "selection":
+            self._selection_mode = "full"
+            self._show_mode()
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle save input submission."""
+        if event.input.id == "save-input":
+            editor = self.query_one("#editor", TextArea)
+            new_path = handle_save_submit(
+                event.value, self._cwd, editor, self._set_status
+            )
+            if new_path:
+                self._file_path = new_path
+            event.input.remove_class("visible")
+            editor.focus()
+
+    # -------------------------------------------------------------------------
+    # Actions
+    # -------------------------------------------------------------------------
 
     def action_noop(self) -> None:
         pass
@@ -137,57 +158,23 @@ class RiptextApp(App):
         editor = self.query_one("#editor", TextArea)
         current_text = editor.text
         editor.text = self._pre_transform_text
-        self._pre_transform_text = current_text  # Allow redo by undoing again
+        self._pre_transform_text = current_text
         self._set_status("Undid last transform. (Ctrl+Z again to redo)", auto_clear=True)
 
     def action_save(self) -> None:
-        """Show save input or save directly if file path is set."""
-        save_input = self.query_one("#save-input", Input)
-        if save_input.has_class("visible"):
-            # Already visible, hide it
-            save_input.remove_class("visible")
-            self.query_one("#editor", TextArea).focus()
-            self._show_mode()
-        else:
-            # Show save input
-            if self._file_path:
-                save_input.value = str(self._file_path)
-            else:
-                save_input.value = str(self._cwd / "untitled.txt")
-            save_input.add_class("visible")
-            save_input.focus()
-            self._set_status("Enter path and press Enter to save, Esc to cancel")
+        """Toggle save input visibility."""
+        toggle_save_input(
+            self.query_one("#save-input", Input),
+            self.query_one("#editor", TextArea),
+            self._file_path,
+            self._cwd,
+            self._show_mode,
+            self._set_status,
+        )
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle save input submission."""
-        if event.input.id == "save-input":
-            path = Path(event.value).expanduser()
-            if not path.is_absolute():
-                path = self._cwd / path
-            try:
-                editor = self.query_one("#editor", TextArea)
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(editor.text, encoding="utf-8")
-                self._file_path = path
-                self._set_status(f"Saved to {path}", auto_clear=True)
-            except OSError as e:
-                self._set_status(f"Save failed: {e}", error=True, auto_clear=True)
-            event.input.remove_class("visible")
-            self.query_one("#editor", TextArea).focus()
-
-    def on_key(self, event) -> None:  # type: ignore[override]
-        if self._debug_keys:
-            key_name = event.key
-            char = event.character or ""
-            self._set_status(f"Key: {key_name} {char}".strip())
-        # Handle Escape in save input
-        save_input = self.query_one("#save-input", Input)
-        if save_input.has_class("visible") and event.key == "escape":
-            save_input.remove_class("visible")
-            self.query_one("#editor", TextArea).focus()
-            self._show_mode()
-            event.prevent_default()
-            event.stop()
+    # -------------------------------------------------------------------------
+    # Scripts
+    # -------------------------------------------------------------------------
 
     def _reload_scripts(self) -> None:
         scripts = load_all_scripts(self._user_scripts_dir)
@@ -204,23 +191,19 @@ class RiptextApp(App):
 
     def run_script(self, script: ScriptMetadata) -> None:
         editor = self.query_one("#editor", TextArea)
-        
+
         # Handle special detect_language script
         if script.slug == "detect_language":
-            lang = detect_language(self._file_path, editor.text)
-            if lang:
-                editor.language = lang
-                self._set_status(f"Detected: {lang}", auto_clear=True)
-            else:
-                self._set_status("Could not detect language", error=True, auto_clear=True)
+            self._run_detect_language(editor)
             return
-        
+
         text = editor.text
         self._pre_transform_text = text
         selections = get_selections(editor, self._selection_mode)
         new_text, info, errors = run_script(script, text, selections)
         editor.text = new_text
         self._last_script = script
+
         if errors:
             self._set_status(errors[-1], error=True, auto_clear=True)
         elif info:
@@ -228,6 +211,27 @@ class RiptextApp(App):
         else:
             self._set_status(f"Ran {script.name}.", auto_clear=True)
 
+    def _run_detect_language(self, editor: TextArea) -> None:
+        """Handle the detect_language special script."""
+        lang = detect_language(self._file_path, editor.text)
+        if lang:
+            editor.language = lang
+            self._set_status(f"Detected: {lang}", auto_clear=True)
+        else:
+            self._set_status("Could not detect language", error=True, auto_clear=True)
+
+    # -------------------------------------------------------------------------
+    # Syntax highlighting
+    # -------------------------------------------------------------------------
+
+    def _apply_syntax_highlighting(self, editor: TextArea) -> None:
+        """Detect and apply syntax highlighting."""
+        lang = detect_language(self._file_path, editor.text)
+        editor.language = lang
+
+    # -------------------------------------------------------------------------
+    # Status bar
+    # -------------------------------------------------------------------------
 
     def _set_status(
         self, message: str, *, error: bool = False, auto_clear: bool = False
@@ -241,6 +245,9 @@ class RiptextApp(App):
     def _show_mode(self) -> None:
         self._set_status(f"Mode: {MODE_LABELS[self._selection_mode]} (Ctrl+L to change)")
 
+    # -------------------------------------------------------------------------
+    # System commands
+    # -------------------------------------------------------------------------
 
     def get_system_commands(self, screen) -> Iterable[SystemCommand]:
         for command in super().get_system_commands(screen):
