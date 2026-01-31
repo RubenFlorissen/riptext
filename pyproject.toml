@@ -1,0 +1,22 @@
+[project]
+name = "riptext"
+version = "0.1.0"
+description = "Cross-platform TUI text transformation app inspired by Boop."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Ruben" }]
+dependencies = [
+	"rapidfuzz>=3.5",
+	"textual>=0.55",
+]
+
+[project.scripts]
+riptext = "riptext.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.21.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+# uv will read dependencies from [project] tables.
