@@ -33,6 +33,10 @@ class RiptextApp(App):
     #status { height: 1; }
     #save-input { display: none; height: auto; margin: 0; padding: 0; }
     #save-input.visible { display: block; }
+    #find-input { display: none; height: auto; margin: 0; padding: 0; }
+    #find-input.visible { display: block; }
+    #goto-input { display: none; height: auto; margin: 0; padding: 0; }
+    #goto-input.visible { display: block; }
     """
 
     COMMANDS = App.COMMANDS | {RipCommandProvider}
@@ -42,6 +46,10 @@ class RiptextApp(App):
         ("ctrl+r", "run_last", "Run last"),
         ("ctrl+l", "cycle_mode", "Cycle selection mode"),
         ("ctrl+s", "save", "Save file"),
+        Binding("ctrl+f", "find", "Find", priority=True),
+        Binding("ctrl+g", "goto_line", "Go to line", priority=True),
+        Binding("ctrl+n", "toggle_line_numbers", "Toggle line numbers", priority=True),
+        Binding("ctrl+w", "toggle_word_wrap", "Toggle word wrap", priority=True),
         Binding("ctrl+z", "undo_transform", "Undo last transform", priority=True),
         Binding("ctrl+x", "quit", "Quit", priority=True),
         Binding("ctrl+q", "noop", show=False),
@@ -70,9 +78,11 @@ class RiptextApp(App):
     # -------------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        yield TextArea(id="editor")
+        yield TextArea(id="editor", show_line_numbers=True)
         default_path = str(self._file_path or self._cwd / "untitled.txt")
         yield Input(value=default_path, placeholder="File path to save...", id="save-input")
+        yield Input(placeholder="Find text...", id="find-input")
+        yield Input(placeholder="Go to line number...", id="goto-input")
         yield Label("", id="status")
 
     def on_mount(self) -> None:
@@ -98,14 +108,16 @@ class RiptextApp(App):
         if self._debug_keys:
             self._set_status(f"Key: {event.key} {event.character or ''}".strip())
 
-        # Handle Escape in save input
-        save_input = self.query_one("#save-input", Input)
-        if save_input.has_class("visible") and event.key == "escape":
-            save_input.remove_class("visible")
-            self.query_one("#editor", TextArea).focus()
-            self._show_mode()
-            event.prevent_default()
-            event.stop()
+        # Handle Escape in overlay inputs
+        for input_id in ["#save-input", "#find-input", "#goto-input"]:
+            inp = self.query_one(input_id, Input)
+            if inp.has_class("visible") and event.key == "escape":
+                inp.remove_class("visible")
+                self.query_one("#editor", TextArea).focus()
+                self._show_mode()
+                event.prevent_default()
+                event.stop()
+                return
 
     def on_text_area_selection_changed(self, event: TextArea.SelectionChanged) -> None:
         """Auto-switch to selection mode when text is selected."""
@@ -119,16 +131,24 @@ class RiptextApp(App):
             self._show_mode()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle save input submission."""
+        """Handle input submissions."""
+        editor = self.query_one("#editor", TextArea)
+        
         if event.input.id == "save-input":
-            editor = self.query_one("#editor", TextArea)
             new_path = handle_save_submit(
                 event.value, self._cwd, editor, self._set_status
             )
             if new_path:
                 self._file_path = new_path
-            event.input.remove_class("visible")
-            editor.focus()
+        
+        elif event.input.id == "find-input":
+            self._do_find(event.value, editor)
+        
+        elif event.input.id == "goto-input":
+            self._do_goto_line(event.value, editor)
+        
+        event.input.remove_class("visible")
+        editor.focus()
 
     # -------------------------------------------------------------------------
     # Actions
@@ -171,6 +191,85 @@ class RiptextApp(App):
             self._show_mode,
             self._set_status,
         )
+
+    def action_find(self) -> None:
+        """Show find input."""
+        self._hide_all_inputs()
+        find_input = self.query_one("#find-input", Input)
+        find_input.value = ""
+        find_input.add_class("visible")
+        find_input.focus()
+        self._set_status("Enter text to find, press Enter to search (F3/Ctrl+F to find next)")
+
+    def action_goto_line(self) -> None:
+        """Show go to line input."""
+        self._hide_all_inputs()
+        goto_input = self.query_one("#goto-input", Input)
+        goto_input.value = ""
+        goto_input.add_class("visible")
+        goto_input.focus()
+        self._set_status("Enter line number and press Enter")
+
+    def action_toggle_line_numbers(self) -> None:
+        """Toggle line numbers display."""
+        editor = self.query_one("#editor", TextArea)
+        editor.show_line_numbers = not editor.show_line_numbers
+        state = "on" if editor.show_line_numbers else "off"
+        self._set_status(f"Line numbers {state}", auto_clear=True)
+
+    def action_toggle_word_wrap(self) -> None:
+        """Toggle word wrap."""
+        editor = self.query_one("#editor", TextArea)
+        editor.soft_wrap = not editor.soft_wrap
+        state = "on" if editor.soft_wrap else "off"
+        self._set_status(f"Word wrap {state}", auto_clear=True)
+
+    def _hide_all_inputs(self) -> None:
+        """Hide all overlay inputs."""
+        for input_id in ["#save-input", "#find-input", "#goto-input"]:
+            self.query_one(input_id, Input).remove_class("visible")
+
+    def _do_find(self, query: str, editor: TextArea) -> None:
+        """Find text in editor."""
+        if not query:
+            return
+        text = editor.text
+        cursor_pos = editor.cursor_location
+        # Convert cursor to offset
+        lines = text.split("\n")
+        offset = sum(len(lines[i]) + 1 for i in range(cursor_pos[0])) + cursor_pos[1]
+        # Search from cursor
+        pos = text.find(query, offset + 1)
+        if pos == -1:
+            pos = text.find(query)  # Wrap around
+        if pos == -1:
+            self._set_status(f"'{query}' not found", error=True, auto_clear=True)
+            return
+        # Convert offset to row, col
+        row, col = 0, 0
+        for i, line in enumerate(lines):
+            if pos <= len(line):
+                row, col = i, pos
+                break
+            pos -= len(line) + 1
+        editor.cursor_location = (row, col)
+        editor.selection = ((row, col), (row, col + len(query)))
+        self._set_status(f"Found '{query}'", auto_clear=True)
+        self._last_find_query = query
+
+    def _do_goto_line(self, line_str: str, editor: TextArea) -> None:
+        """Go to specified line number."""
+        try:
+            line_num = int(line_str)
+        except ValueError:
+            self._set_status("Invalid line number", error=True, auto_clear=True)
+            return
+        lines = editor.text.split("\n")
+        if line_num < 1 or line_num > len(lines):
+            self._set_status(f"Line {line_num} out of range (1-{len(lines)})", error=True, auto_clear=True)
+            return
+        editor.cursor_location = (line_num - 1, 0)
+        self._set_status(f"Jumped to line {line_num}", auto_clear=True)
 
     # -------------------------------------------------------------------------
     # Scripts
