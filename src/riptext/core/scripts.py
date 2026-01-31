@@ -68,9 +68,17 @@ def load_user_scripts(directory: Path) -> list[ScriptMetadata]:
     return [_metadata_from_path(path, "user") for path in _iter_script_paths(directory)]
 
 
+def _ensure_user_dir(directory: Path) -> None:
+    """Create user scripts directory if it doesn't exist."""
+    if not directory.exists():
+        directory.mkdir(parents=True, exist_ok=True)
+
+
 def load_all_scripts(user_dir: Path | None = None) -> list[ScriptMetadata]:
     if user_dir is None:
         user_dir = Path.home() / ".riptext" / "rips"
+
+    _ensure_user_dir(user_dir)
 
     scripts = {script.slug: script for script in load_builtin_scripts()}
     for script in load_user_scripts(user_dir):

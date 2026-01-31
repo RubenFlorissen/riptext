@@ -1,11 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
-from rapidfuzz import fuzz
+if TYPE_CHECKING:
+    from rapidfuzz import fuzz as _fuzz_type
 
 from .models import ScriptMetadata
+
+# Lazy import for faster startup
+_fuzz = None
+
+
+def _get_fuzz():
+    global _fuzz
+    if _fuzz is None:
+        from rapidfuzz import fuzz
+        _fuzz = fuzz
+    return _fuzz
 
 
 @dataclass(frozen=True)
@@ -17,7 +29,7 @@ class ScriptMatch:
 def _score_field(query: str, value: str) -> float:
     if not value:
         return 0.0
-    return float(fuzz.WRatio(query, value))
+    return float(_get_fuzz().WRatio(query, value))
 
 
 def rank_scripts(
