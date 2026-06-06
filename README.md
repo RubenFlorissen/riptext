@@ -74,7 +74,7 @@ riptext myfile.txt
 - **Full text** – Transform the entire document
 - **Current line** – Transform only the line where the cursor is
 - **Selection** – Transform only the selected text (auto-activates when you select)
-- **Marked ranges** – Press `Ctrl+E` to collect multiple independent ranges. The next rip runs on all marked ranges, then clears them.
+- **Marked ranges** – Press `Ctrl+E` to collect multiple independent ranges. The next rip or macro runs on all marked ranges, then clears them.
 
 ## Built-in Scripts (26)
 

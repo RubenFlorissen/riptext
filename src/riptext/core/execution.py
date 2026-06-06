@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Callable
+from typing import Callable, Sequence
 import contextlib
 import importlib.util
 import sys
@@ -118,6 +118,47 @@ def run_script(
         full_text = (
             full_text[: current_range.start]
             + replacement
+            + full_text[current_range.end :]
+        )
+
+    return full_text, info_messages, error_messages
+
+
+def run_script_sequence(
+    scripts: Sequence[ScriptMetadata],
+    full_text: str,
+    selections: list[SelectionRange],
+) -> tuple[str, list[str], list[str]]:
+    """Run scripts as a chain over full text or each selected range.
+
+    When selections are present, each range is transformed independently by the
+    entire script sequence, then replaced once. That keeps original offsets valid
+    even when earlier scripts in the chain change the target length.
+    """
+    info_messages: list[str] = []
+    error_messages: list[str] = []
+
+    if not selections:
+        for script in scripts:
+            full_text, info, errors = run_script(script, full_text, [])
+            info_messages.extend(info)
+            error_messages.extend(errors)
+        return full_text, info_messages, error_messages
+
+    ranges = sorted(
+        [selection.normalized() for selection in selections],
+        key=lambda selection: selection.start,
+        reverse=True,
+    )
+    for current_range in ranges:
+        target_text = full_text[current_range.start : current_range.end]
+        for script in scripts:
+            target_text, info, errors = run_script(script, target_text, [])
+            info_messages.extend(info)
+            error_messages.extend(errors)
+        full_text = (
+            full_text[: current_range.start]
+            + target_text
             + full_text[current_range.end :]
         )
 

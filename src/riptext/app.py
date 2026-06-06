@@ -11,7 +11,7 @@ from textual.binding import Binding
 from textual.widgets import Input, Label, TextArea
 
 from .commands import RipCommandProvider
-from .core.execution import run_script
+from .core.execution import run_script, run_script_sequence
 from .core.models import ScriptMetadata, SelectionRange
 from .core.scripts import ScriptIndex, load_all_scripts
 from .favorites import add_recent, toggle_favorite
@@ -445,33 +445,52 @@ class RiptextApp(App):
         self._pre_transform_text = text
 
         all_errors: list[str] = []
-        ran = 0
-        if self._marked_selections and len(slugs) > 1:
-            self._set_status(
-                "Marked selections currently support one rip at a time, not macros.",
-                error=True,
-                auto_clear=True,
-            )
-            return
+        scripts: list[ScriptMetadata] = []
         for slug in slugs:
             script = self._find_script_by_slug(slug)
             if not script:
                 all_errors.append(f"Script '{slug}' not found")
                 continue
+            scripts.append(script)
+
+        if not scripts:
+            message = all_errors[-1] if all_errors else "Macro has no scripts."
+            self._set_status(message, error=True, auto_clear=True)
+            return
+
+        if self._marked_selections:
             selections = get_selections(
                 editor,
                 self._selection_mode,
                 self._marked_selections,
             )
             marked_count = len(self._marked_selections)
+            new_text, _, errors = run_script_sequence(scripts, editor.text, selections)
+            self._applying_transform = True
+            try:
+                editor.text = new_text
+            finally:
+                self._applying_transform = False
+            self._marked_selections = []
+            all_errors.extend(errors)
+            if all_errors:
+                self._set_status(all_errors[-1], error=True, auto_clear=True)
+            else:
+                self._set_status(
+                    f"Macro complete ({len(scripts)} scripts on {marked_count} selections).",
+                    auto_clear=True,
+                )
+            return
+
+        ran = 0
+        for script in scripts:
+            selections = get_selections(editor, self._selection_mode)
             new_text, _, errors = run_script(script, editor.text, selections)
             self._applying_transform = True
             try:
                 editor.text = new_text
             finally:
                 self._applying_transform = False
-            if marked_count:
-                self._marked_selections = []
             all_errors.extend(errors)
             ran += 1
 

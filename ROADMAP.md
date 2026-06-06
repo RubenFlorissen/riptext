@@ -13,7 +13,7 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 - [ ] Native-feeling multi-selection polish
   - Add visual indicators for marked ranges if Textual supports a maintainable overlay.
-  - Support macro chains over marked ranges without stale offsets.
+  - [x] Support macro chains over marked ranges without stale offsets.
 
 ## Next
 
