@@ -8,6 +8,9 @@ Working list for future riptext improvements. Keep this practical: each item sho
   - Mark multiple independent ranges from the editor.
   - Run one rip across all marked ranges with safe in-place replacement.
   - Keep selection handling understandable in the status bar.
+- [x] Macro improvements
+  - List, delete, rename, and favorite macros.
+  - Show macro steps before running.
 - [x] Script validation
   - Detect missing metadata, duplicate slugs, invalid JSON metadata, and missing entrypoints.
   - Expose validation through the command palette.
@@ -24,9 +27,6 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 ## Next
 
-- [ ] Macro improvements
-  - List, delete, rename, and favorite macros.
-  - Show macro steps before running.
 - [ ] Transform history
   - Multi-step undo/redo.
   - Re-run scripts from history.

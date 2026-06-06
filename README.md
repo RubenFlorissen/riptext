@@ -14,7 +14,7 @@ A cross-platform terminal UI (TUI) text transformation tool inspired by [Boop](h
 - **Built-in Scripts** – 26 transformations organized in 9 categories
 - **User Scripts** – Drop Python scripts in `~/.riptext/rips/` to extend functionality
 - **Favorites & Recent** – Favorite scripts with `Ctrl+D`, recently used scripts are boosted
-- **Macros** – Record chains of transforms with `Ctrl+M` and replay them
+- **Macros** – Record, preview, favorite, rename, delete, and replay transform chains
 - **Script Validation** – Check user scripts for metadata and entrypoint issues
 - **Script Manager Commands** – Reload scripts, show the user rips path, create starter rips, and inspect issues
 - **Syntax Highlighting** – Auto-detect language or run Detect Language
@@ -78,6 +78,8 @@ Script management is available from the command palette:
 - `Scripts: Create user rip template`
 - `Scripts: Show script issues`
 - `Settings: Validate scripts`
+- `Macros: Show saved macros`
+- `Macros: Preview/Rename/Favorite/Delete <macro>`
 
 ### Selection Modes
 

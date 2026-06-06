@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 
-from .favorites import get_script_priority
+from .favorites import get_script_priority, is_favorite_macro
 from .macros import list_macros
 
 if TYPE_CHECKING:
@@ -45,11 +45,43 @@ class RipCommandProvider(Provider):
             )
 
         # Macros
-        for macro in list_macros():
+        macros = list_macros()
+        macros.sort(
+            key=lambda macro: (
+                0 if is_favorite_macro(macro["slug"]) else 1,
+                macro["name"].lower(),
+            )
+        )
+        for macro in macros:
+            prefix = "★ " if is_favorite_macro(macro["slug"]) else ""
+            steps = app.macro_step_summary(macro["slugs"])
             yield DiscoveryHit(
-                display=f"⚡ Macro: {macro['name']}",
-                command=partial(app.run_macro, macro["slugs"]),
-                help=f"Chain: {' → '.join(macro['slugs'])}",
+                display=f"{prefix}Macro: {macro['name']}",
+                command=partial(app.run_saved_macro, macro),
+                help=f"Steps: {steps}",
+            )
+            yield DiscoveryHit(
+                display=f"Macros: Preview {macro['name']}",
+                command=partial(app.preview_macro, macro),
+                help=f"Steps: {steps}",
+            )
+            yield DiscoveryHit(
+                display=f"Macros: Rename {macro['name']}",
+                command=partial(app.prompt_rename_macro, macro),
+                help="Rename this saved macro",
+            )
+            favorite_verb = (
+                "Unfavorite" if is_favorite_macro(macro["slug"]) else "Favorite"
+            )
+            yield DiscoveryHit(
+                display=f"Macros: {favorite_verb} {macro['name']}",
+                command=partial(app.toggle_saved_macro_favorite, macro),
+                help="Toggle macro favorite status",
+            )
+            yield DiscoveryHit(
+                display=f"Macros: Delete {macro['name']}",
+                command=partial(app.delete_saved_macro, macro),
+                help="Delete this saved macro",
             )
 
     async def search(self, query: str) -> Hits:
@@ -81,12 +113,41 @@ class RipCommandProvider(Provider):
 
         # Macros
         for macro in list_macros():
-            candidate = f"macro {macro['name']} {' '.join(macro['slugs'])}"
+            steps = app.macro_step_summary(macro["slugs"])
+            candidate = f"macro {macro['name']} {' '.join(macro['slugs'])} {steps}"
             score = matcher.match(candidate)
             if score > 0:
+                if is_favorite_macro(macro["slug"]):
+                    score += 20
+                prefix = "★ " if is_favorite_macro(macro["slug"]) else ""
                 yield Hit(
                     score,
-                    matcher.highlight(f"⚡ Macro: {macro['name']}"),
-                    partial(app.run_macro, macro["slugs"]),
-                    help=f"Chain: {' → '.join(macro['slugs'])}",
+                    matcher.highlight(f"{prefix}Macro: {macro['name']}"),
+                    partial(app.run_saved_macro, macro),
+                    help=f"Steps: {steps}",
+                )
+
+            favorite_verb = (
+                "unfavorite" if is_favorite_macro(macro["slug"]) else "favorite"
+            )
+            favorite_display = favorite_verb.title()
+            action_hits = [
+                ("preview", f"Macros: Preview {macro['name']}", app.preview_macro),
+                ("rename", f"Macros: Rename {macro['name']}", app.prompt_rename_macro),
+                (
+                    favorite_verb,
+                    f"Macros: {favorite_display} {macro['name']}",
+                    app.toggle_saved_macro_favorite,
+                ),
+                ("delete", f"Macros: Delete {macro['name']}", app.delete_saved_macro),
+            ]
+            for action, display, callback in action_hits:
+                action_score = matcher.match(f"{action} macro {macro['name']} {steps}")
+                if action_score <= 0:
+                    continue
+                yield Hit(
+                    action_score,
+                    matcher.highlight(display),
+                    partial(callback, macro),
+                    help=f"Steps: {steps}",
                 )

@@ -46,6 +46,48 @@ def toggle_favorite(slug: str) -> bool:
     return is_fav
 
 
+def is_favorite_macro(slug: str) -> bool:
+    """Return True when a macro slug is favorited."""
+    return slug in _load_state().get("favorite_macros", [])
+
+
+def toggle_favorite_macro(slug: str) -> bool:
+    """Toggle a macro as favorite. Returns True if now a favorite."""
+    state = _load_state()
+    favorites = state.get("favorite_macros", [])
+    if slug in favorites:
+        favorites.remove(slug)
+        is_fav = False
+    else:
+        favorites.append(slug)
+        is_fav = True
+    state["favorite_macros"] = favorites
+    _save_state(state)
+    return is_fav
+
+
+def rename_favorite_macro(old_slug: str, new_slug: str) -> None:
+    """Keep macro favorite state when a macro is renamed."""
+    state = _load_state()
+    favorites = state.get("favorite_macros", [])
+    if old_slug not in favorites:
+        return
+    state["favorite_macros"] = [
+        new_slug if slug == old_slug else slug for slug in favorites
+    ]
+    _save_state(state)
+
+
+def remove_favorite_macro(slug: str) -> None:
+    """Remove a macro from favorite state if present."""
+    state = _load_state()
+    favorites = state.get("favorite_macros", [])
+    if slug not in favorites:
+        return
+    state["favorite_macros"] = [item for item in favorites if item != slug]
+    _save_state(state)
+
+
 def get_recent() -> list[str]:
     """Return list of recently used script slugs (most recent first)."""
     return _load_state().get("recent", [])

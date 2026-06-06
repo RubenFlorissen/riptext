@@ -14,8 +14,14 @@ from .commands import RipCommandProvider
 from .core.execution import run_script, run_script_sequence
 from .core.models import ScriptDiagnostic, ScriptMetadata, SelectionRange
 from .core.scripts import ScriptIndex, load_all_scripts, validate_scripts
-from .favorites import add_recent, toggle_favorite
-from .macros import save_macro
+from .favorites import (
+    add_recent,
+    remove_favorite_macro,
+    rename_favorite_macro,
+    toggle_favorite,
+    toggle_favorite_macro,
+)
+from .macros import delete_macro, list_macros, macro_slug, rename_macro, save_macro
 from .save import handle_save_submit, toggle_save_input
 from .script_manager import (
     create_user_rip_template,
@@ -96,6 +102,9 @@ class RiptextApp(App):
         self._selection_mode: SelectionMode = "full"
         self._macro_recording: list[str] = []
         self._is_recording_macro = False
+        self._macro_input_mode = "save"
+        self._macro_rename_target: dict | None = None
+        self._macro_preview_index = 0
         self._marked_selections: list[SelectionRange] = []
         self._applying_transform = False
         self._status_version = 0
@@ -185,7 +194,10 @@ class RiptextApp(App):
             self._do_goto_line(event.value, editor)
 
         elif event.input.id == "macro-input":
-            self._save_macro(event.value)
+            if self._macro_input_mode == "rename":
+                self._rename_macro(event.value)
+            else:
+                self._save_macro(event.value)
 
         event.input.remove_class("visible")
         editor.focus()
@@ -368,6 +380,8 @@ class RiptextApp(App):
             # Show input to name the macro
             self._hide_all_inputs()
             macro_input = self.query_one("#macro-input", Input)
+            self._macro_input_mode = "save"
+            self._macro_rename_target = None
             macro_input.value = ""
             macro_input.add_class("visible")
             macro_input.focus()
@@ -387,6 +401,85 @@ class RiptextApp(App):
             auto_clear=True,
         )
         self._macro_recording = []
+
+    def action_show_macros(self) -> None:
+        """Cycle through saved macros and show their steps."""
+        macros = list_macros()
+        if not macros:
+            self._macro_preview_index = 0
+            self._set_status("No saved macros.", error=True, auto_clear=True)
+            return
+
+        self._macro_preview_index %= len(macros)
+        macro = macros[self._macro_preview_index]
+        self._macro_preview_index += 1
+        steps = self.macro_step_summary(macro["slugs"])
+        self._set_status(
+            f"Macro {self._macro_preview_index}/{len(macros)}: "
+            f"{macro['name']} - {steps}",
+            auto_clear=10.0,
+        )
+
+    def prompt_rename_macro(self, macro: dict) -> None:
+        """Prompt for a new macro name."""
+        self._hide_all_inputs()
+        self._macro_input_mode = "rename"
+        self._macro_rename_target = macro
+        macro_input = self.query_one("#macro-input", Input)
+        macro_input.value = macro["name"]
+        macro_input.add_class("visible")
+        macro_input.focus()
+        self._set_status(f"Rename macro '{macro['name']}' and press Enter.")
+
+    def _rename_macro(self, new_name: str) -> None:
+        """Rename the macro selected by prompt_rename_macro."""
+        target = self._macro_rename_target
+        self._macro_input_mode = "save"
+        self._macro_rename_target = None
+        new_name = new_name.strip()
+        if target is None or not new_name:
+            self._set_status("Macro rename cancelled.", auto_clear=True)
+            return
+
+        old_slug = target["slug"]
+        path = rename_macro(target["name"], new_name)
+        if path is None:
+            self._set_status(
+                f"Could not rename macro '{target['name']}'.",
+                error=True,
+                auto_clear=True,
+            )
+            return
+        rename_favorite_macro(old_slug, macro_slug(new_name))
+        self._set_status(
+            f"Renamed macro '{target['name']}' to '{new_name}'.",
+            auto_clear=True,
+        )
+
+    def delete_saved_macro(self, macro: dict) -> None:
+        """Delete a saved macro."""
+        if delete_macro(macro["name"]):
+            remove_favorite_macro(macro["slug"])
+            self._set_status(f"Deleted macro '{macro['name']}'.", auto_clear=True)
+        else:
+            self._set_status(
+                f"Could not delete macro '{macro['name']}'.",
+                error=True,
+                auto_clear=True,
+            )
+
+    def toggle_saved_macro_favorite(self, macro: dict) -> None:
+        """Toggle favorite state for a saved macro."""
+        is_fav = toggle_favorite_macro(macro["slug"])
+        label = "Favorited" if is_fav else "Unfavorited"
+        self._set_status(f"{label} macro: {macro['name']}", auto_clear=True)
+
+    def preview_macro(self, macro: dict) -> None:
+        """Show a saved macro's steps."""
+        self._set_status(
+            f"Macro '{macro['name']}': {self.macro_step_summary(macro['slugs'])}",
+            auto_clear=10.0,
+        )
 
     def action_validate_scripts(self) -> None:
         """Validate built-in and user scripts."""
@@ -520,7 +613,19 @@ class RiptextApp(App):
             target = f" on {marked_count} selections" if marked_count else ""
             self._set_status(f"Ran {script.name}{target}.{rec}", auto_clear=True)
 
-    def run_macro(self, slugs: list[str]) -> None:
+    def macro_step_summary(self, slugs: list[str]) -> str:
+        """Return human-readable script names for a macro chain."""
+        names: list[str] = []
+        for slug in slugs:
+            script = self._find_script_by_slug(slug)
+            names.append(script.name if script else slug)
+        return " -> ".join(names) if names else "No steps"
+
+    def run_saved_macro(self, macro: dict) -> None:
+        """Run a saved macro definition."""
+        self.run_macro(macro["slugs"], macro_name=macro["name"])
+
+    def run_macro(self, slugs: list[str], macro_name: str | None = None) -> None:
         """Run a sequence of scripts (macro)."""
         editor = self.query_one("#editor", TextArea)
         text = editor.text
@@ -558,13 +663,14 @@ class RiptextApp(App):
             if all_errors:
                 self._set_status(all_errors[-1], error=True, auto_clear=True)
             else:
+                label = f"'{macro_name}' " if macro_name else ""
                 self._set_status(
-                    f"Macro complete ({len(scripts)} scripts on {marked_count} selections).",
+                    f"Macro {label}complete: {self.macro_step_summary(slugs)} "
+                    f"on {marked_count} selections.",
                     auto_clear=True,
                 )
             return
 
-        ran = 0
         for script in scripts:
             selections = get_selections(editor, self._selection_mode)
             new_text, _, errors = run_script(script, editor.text, selections)
@@ -574,12 +680,15 @@ class RiptextApp(App):
             finally:
                 self._applying_transform = False
             all_errors.extend(errors)
-            ran += 1
 
         if all_errors:
             self._set_status(all_errors[-1], error=True, auto_clear=True)
         else:
-            self._set_status(f"Macro complete ({ran} scripts).", auto_clear=True)
+            label = f"'{macro_name}' " if macro_name else ""
+            self._set_status(
+                f"Macro {label}complete: {self.macro_step_summary(slugs)}.",
+                auto_clear=True,
+            )
 
     def _find_script_by_slug(self, slug: str) -> ScriptMetadata | None:
         """Find a script by slug."""
@@ -667,6 +776,12 @@ class RiptextApp(App):
             "Settings: Record/save macro",
             "Start/stop macro recording (Ctrl+M)",
             self.action_start_macro,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Macros: Show saved macros",
+            "Cycle through saved macros and show their steps",
+            self.action_show_macros,
             discover=False,
         )
         yield SystemCommand(
