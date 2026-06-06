@@ -40,11 +40,11 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 ## In Progress
 
-- [ ] Native-feeling multi-selection polish
-  - Add visual indicators for marked ranges if Textual supports a maintainable overlay.
+- [x] Native-feeling multi-selection polish
+  - Add maintainable visual indicators for marked ranges.
   - [x] Support macro chains over marked ranges without stale offsets.
 
 ## Next
 
-- [ ] Native-feeling multi-selection visual indicators
+- [ ] Editor overlay range highlighting
   - Revisit when Textual exposes a stable range decoration or overlay API for `TextArea`.

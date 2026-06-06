@@ -39,6 +39,7 @@ from .selection import (
     current_selection,
     get_selections,
     normalize_ranges,
+    offset_to_loc,
 )
 from .syntax import detect_language
 
@@ -71,6 +72,8 @@ class RiptextApp(App):
     CSS = """
     Screen { layout: vertical; }
     #editor { height: 1fr; }
+    #marked-ranges { display: none; height: 1; color: $accent; }
+    #marked-ranges.visible { display: block; }
     #status { height: 1; }
     #save-input { display: none; height: auto; margin: 0; padding: 0; }
     #save-input.visible { display: block; }
@@ -145,6 +148,7 @@ class RiptextApp(App):
 
     def compose(self) -> ComposeResult:
         yield TextArea(id="editor", show_line_numbers=True)
+        yield Label("", id="marked-ranges")
         default_path = str(self._file_path or self._cwd / "untitled.txt")
         yield Input(value=default_path, placeholder="File path to save...", id="save-input")
         yield Input(placeholder="Find text...", id="find-input")
@@ -161,6 +165,7 @@ class RiptextApp(App):
             editor.text = self._initial_text
         self._apply_syntax_highlighting(editor)
         self._apply_config_keybindings()
+        self._update_marked_ranges_indicator()
         editor.focus()
         if os.environ.get("TERM_PROGRAM") == "vscode" or os.environ.get("VSCODE_PID"):
             self._set_status(
@@ -205,6 +210,7 @@ class RiptextApp(App):
         if self._applying_transform or not self._marked_selections:
             return
         self._marked_selections = []
+        self._update_marked_ranges_indicator()
         self._set_status("Cleared marked selections after text edit.", auto_clear=True)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -268,6 +274,7 @@ class RiptextApp(App):
         self._marked_selections = normalize_ranges(
             [*self._marked_selections, candidate]
         )
+        self._update_marked_ranges_indicator()
         count = len(self._marked_selections)
         self._set_status(
             f"Marked selection {count}. Run a rip to transform marked ranges.",
@@ -285,6 +292,7 @@ class RiptextApp(App):
             return
         count = len(self._marked_selections)
         self._marked_selections = []
+        self._update_marked_ranges_indicator()
         self._set_status(f"Cleared {count} marked selections.", auto_clear=True)
 
     def action_undo_transform(self) -> None:
@@ -721,6 +729,7 @@ class RiptextApp(App):
         self._last_script = script
         if marked_count:
             self._marked_selections = []
+            self._update_marked_ranges_indicator()
         self._record_transform(script.name, [script.slug], text, new_text)
 
         # Track usage
@@ -782,6 +791,7 @@ class RiptextApp(App):
             finally:
                 self._applying_transform = False
             self._marked_selections = []
+            self._update_marked_ranges_indicator()
             label = macro_name or "Macro"
             self._record_transform(label, slugs, before_text, new_text)
             all_errors.extend(errors)
@@ -848,6 +858,34 @@ class RiptextApp(App):
     # Status bar
     # -------------------------------------------------------------------------
 
+    def _format_marked_range(self, text: str, selection: SelectionRange) -> str:
+        """Return a compact one-based line/column label for a marked range."""
+        current = selection.normalized()
+        start_row, start_col = offset_to_loc(text, current.start)
+        end_row, end_col = offset_to_loc(text, current.end)
+        return (
+            f"L{start_row + 1}:C{start_col + 1}-"
+            f"L{end_row + 1}:C{end_col + 1}"
+        )
+
+    def _update_marked_ranges_indicator(self) -> None:
+        """Show or hide the marked range indicator strip."""
+        label = self.query_one("#marked-ranges", Label)
+        if not self._marked_selections:
+            label.update("")
+            label.remove_class("visible")
+            return
+
+        editor = self.query_one("#editor", TextArea)
+        ranges = [
+            self._format_marked_range(editor.text, selection)
+            for selection in self._marked_selections[:4]
+        ]
+        remaining = len(self._marked_selections) - len(ranges)
+        suffix = f" | +{remaining} more" if remaining else ""
+        label.update(f"Marked ranges: {' | '.join(ranges)}{suffix}")
+        label.add_class("visible")
+
     def _set_status(
         self, message: str, *, error: bool = False, auto_clear: bool | float = False
     ) -> None:
@@ -866,6 +904,7 @@ class RiptextApp(App):
             self.set_timer(delay, clear_if_current)
 
     def _show_mode(self) -> None:
+        self._update_marked_ranges_indicator()
         marked = (
             f" | Marked: {len(self._marked_selections)}"
             if self._marked_selections

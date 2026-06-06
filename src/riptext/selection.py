@@ -32,6 +32,18 @@ def loc_to_offset(text: str, row: int, col: int) -> int:
     return sum(len(lines[i]) + 1 for i in range(row)) + col
 
 
+def offset_to_loc(text: str, offset: int) -> tuple[int, int]:
+    """Convert a document offset to a zero-based TextArea location."""
+    lines = text.split("\n")
+    offset = max(0, min(offset, len(text)))
+    remaining = offset
+    for row, line in enumerate(lines):
+        if remaining <= len(line):
+            return row, remaining
+        remaining -= len(line) + 1
+    return len(lines) - 1, len(lines[-1])
+
+
 def current_selection(editor: TextArea) -> SelectionRange | None:
     """Return the active TextArea selection as offsets, if any."""
     text = editor.text
