@@ -11,6 +11,9 @@ Working list for future riptext improvements. Keep this practical: each item sho
 - [x] Macro improvements
   - List, delete, rename, and favorite macros.
   - Show macro steps before running.
+- [x] Transform history
+  - Multi-step undo/redo.
+  - Re-run scripts from history.
 - [x] Script validation
   - Detect missing metadata, duplicate slugs, invalid JSON metadata, and missing entrypoints.
   - Expose validation through the command palette.
@@ -27,9 +30,6 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 ## Next
 
-- [ ] Transform history
-  - Multi-step undo/redo.
-  - Re-run scripts from history.
 - [ ] Better picker UX
   - Category/recent/favorite grouping.
   - Show tags and aliases.

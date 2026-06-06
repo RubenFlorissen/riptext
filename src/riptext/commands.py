@@ -84,6 +84,13 @@ class RipCommandProvider(Provider):
                 help="Delete this saved macro",
             )
 
+        for entry in app.transform_history_for_commands():
+            yield DiscoveryHit(
+                display=f"History: Re-run {entry.label}",
+                command=partial(app.rerun_history_entry, entry),
+                help=f"Steps: {app.macro_step_summary(entry.slugs)}",
+            )
+
     async def search(self, query: str) -> Hits:
         matcher = self.matcher(query)
         app = self._app()
@@ -151,3 +158,15 @@ class RipCommandProvider(Provider):
                     partial(callback, macro),
                     help=f"Steps: {steps}",
                 )
+
+        for entry in app.transform_history_for_commands():
+            steps = app.macro_step_summary(entry.slugs)
+            score = matcher.match(f"history rerun {entry.label} {steps}")
+            if score <= 0:
+                continue
+            yield Hit(
+                score,
+                matcher.highlight(f"History: Re-run {entry.label}"),
+                partial(app.rerun_history_entry, entry),
+                help=f"Steps: {steps}",
+            )

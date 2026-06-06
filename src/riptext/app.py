@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
@@ -21,6 +21,7 @@ from .favorites import (
     toggle_favorite,
     toggle_favorite_macro,
 )
+from .history import TransformHistory, TransformHistoryEntry
 from .macros import delete_macro, list_macros, macro_slug, rename_macro, save_macro
 from .save import handle_save_submit, toggle_save_input
 from .script_manager import (
@@ -69,7 +70,8 @@ class RiptextApp(App):
         Binding("ctrl+g", "goto_line", "Go to line", priority=True),
         Binding("ctrl+n", "toggle_line_numbers", "Toggle line numbers", priority=True),
         Binding("ctrl+w", "toggle_word_wrap", "Toggle word wrap", priority=True),
-        Binding("ctrl+z", "undo_transform", "Undo last transform", priority=True),
+        Binding("ctrl+z", "undo_transform", "Undo transform", priority=True),
+        Binding("ctrl+y", "redo_transform", "Redo transform", priority=True),
         Binding("ctrl+d", "toggle_favorite", "Toggle favorite", priority=True),
         Binding("ctrl+m", "start_macro", "Record/save macro", priority=True),
         Binding("ctrl+e", "mark_selection", "Mark selection", priority=True),
@@ -97,7 +99,7 @@ class RiptextApp(App):
         self._cwd = cwd or Path.cwd()
         self._index: ScriptIndex | None = None
         self._last_script: ScriptMetadata | None = None
-        self._pre_transform_text: str | None = None
+        self._history = TransformHistory()
         self._debug_keys = os.environ.get("RIPTEXT_DEBUG_KEYS") == "1"
         self._selection_mode: SelectionMode = "full"
         self._macro_recording: list[str] = []
@@ -105,6 +107,7 @@ class RiptextApp(App):
         self._macro_input_mode = "save"
         self._macro_rename_target: dict | None = None
         self._macro_preview_index = 0
+        self._history_preview_index = 0
         self._marked_selections: list[SelectionRange] = []
         self._applying_transform = False
         self._status_version = 0
@@ -257,15 +260,55 @@ class RiptextApp(App):
         self._set_status(f"Cleared {count} marked selections.", auto_clear=True)
 
     def action_undo_transform(self) -> None:
-        """Revert to text before last transform."""
-        if self._pre_transform_text is None:
+        """Undo the most recent transform."""
+        entry = self._history.undo()
+        if entry is None:
             self._set_status("Nothing to undo.", error=True)
             return
         editor = self.query_one("#editor", TextArea)
-        current_text = editor.text
-        editor.text = self._pre_transform_text
-        self._pre_transform_text = current_text
-        self._set_status("Undid last transform. (Ctrl+Z again to redo)", auto_clear=True)
+        self._applying_transform = True
+        try:
+            editor.text = entry.before_text
+        finally:
+            self._applying_transform = False
+        self._set_status(
+            f"Undid {entry.label}. {self._history.undo_count} undo left.",
+            auto_clear=True,
+        )
+
+    def action_redo_transform(self) -> None:
+        """Redo the most recently undone transform."""
+        entry = self._history.redo()
+        if entry is None:
+            self._set_status("Nothing to redo.", error=True)
+            return
+        editor = self.query_one("#editor", TextArea)
+        self._applying_transform = True
+        try:
+            editor.text = entry.after_text
+        finally:
+            self._applying_transform = False
+        self._set_status(
+            f"Redid {entry.label}. {self._history.redo_count} redo left.",
+            auto_clear=True,
+        )
+
+    def action_show_transform_history(self) -> None:
+        """Cycle through recent transform history entries."""
+        entries = self.transform_history_for_commands()
+        if not entries:
+            self._history_preview_index = 0
+            self._set_status("No transform history yet.", error=True, auto_clear=True)
+            return
+
+        self._history_preview_index %= len(entries)
+        entry = entries[self._history_preview_index]
+        self._history_preview_index += 1
+        self._set_status(
+            f"History {self._history_preview_index}/{len(entries)}: "
+            f"{entry.label} - {self.macro_step_summary(entry.slugs)}",
+            auto_clear=10.0,
+        )
 
     def action_save(self) -> None:
         """Toggle save input visibility."""
@@ -573,6 +616,50 @@ class RiptextApp(App):
             return []
         return sorted(self._index.scripts, key=lambda s: s.name.lower())
 
+    def transform_history_for_commands(self) -> list[TransformHistoryEntry]:
+        """Return recent transforms that can be re-run from the palette."""
+        return self._history.recent()[:10]
+
+    def _record_transform(
+        self,
+        label: str,
+        slugs: Sequence[str],
+        before_text: str,
+        after_text: str,
+    ) -> None:
+        self._history.record(
+            TransformHistoryEntry(
+                label=label,
+                slugs=tuple(slugs),
+                before_text=before_text,
+                after_text=after_text,
+            )
+        )
+
+    def rerun_history_entry(self, entry: TransformHistoryEntry) -> None:
+        """Re-run a transform history entry on the current editor state."""
+        if not entry.slugs:
+            self._set_status(
+                f"History entry '{entry.label}' has no scripts.",
+                error=True,
+                auto_clear=True,
+            )
+            return
+
+        if len(entry.slugs) == 1:
+            script = self._find_script_by_slug(entry.slugs[0])
+            if script is None:
+                self._set_status(
+                    f"Script '{entry.slugs[0]}' not found.",
+                    error=True,
+                    auto_clear=True,
+                )
+                return
+            self.run_script(script)
+            return
+
+        self.run_macro(list(entry.slugs), macro_name=entry.label)
+
     def run_script(self, script: ScriptMetadata) -> None:
         editor = self.query_one("#editor", TextArea)
 
@@ -582,7 +669,6 @@ class RiptextApp(App):
             return
 
         text = editor.text
-        self._pre_transform_text = text
         selections = get_selections(
             editor,
             self._selection_mode,
@@ -598,6 +684,7 @@ class RiptextApp(App):
         self._last_script = script
         if marked_count:
             self._marked_selections = []
+        self._record_transform(script.name, [script.slug], text, new_text)
 
         # Track usage
         add_recent(script.slug)
@@ -613,7 +700,7 @@ class RiptextApp(App):
             target = f" on {marked_count} selections" if marked_count else ""
             self._set_status(f"Ran {script.name}{target}.{rec}", auto_clear=True)
 
-    def macro_step_summary(self, slugs: list[str]) -> str:
+    def macro_step_summary(self, slugs: Sequence[str]) -> str:
         """Return human-readable script names for a macro chain."""
         names: list[str] = []
         for slug in slugs:
@@ -628,8 +715,7 @@ class RiptextApp(App):
     def run_macro(self, slugs: list[str], macro_name: str | None = None) -> None:
         """Run a sequence of scripts (macro)."""
         editor = self.query_one("#editor", TextArea)
-        text = editor.text
-        self._pre_transform_text = text
+        before_text = editor.text
 
         all_errors: list[str] = []
         scripts: list[ScriptMetadata] = []
@@ -659,6 +745,8 @@ class RiptextApp(App):
             finally:
                 self._applying_transform = False
             self._marked_selections = []
+            label = macro_name or "Macro"
+            self._record_transform(label, slugs, before_text, new_text)
             all_errors.extend(errors)
             if all_errors:
                 self._set_status(all_errors[-1], error=True, auto_clear=True)
@@ -681,6 +769,8 @@ class RiptextApp(App):
                 self._applying_transform = False
             all_errors.extend(errors)
 
+        label = macro_name or "Macro"
+        self._record_transform(label, slugs, before_text, editor.text)
         if all_errors:
             self._set_status(all_errors[-1], error=True, auto_clear=True)
         else:
@@ -764,6 +854,18 @@ class RiptextApp(App):
             "Settings: Run last rip",
             "Re-run the most recently executed script (Ctrl+R)",
             self.action_run_last,
+            discover=False,
+        )
+        yield SystemCommand(
+            "History: Redo transform",
+            "Redo the most recently undone transform (Ctrl+Y)",
+            self.action_redo_transform,
+            discover=False,
+        )
+        yield SystemCommand(
+            "History: Show transform history",
+            "Cycle through recent transform history entries",
+            self.action_show_transform_history,
             discover=False,
         )
         yield SystemCommand(

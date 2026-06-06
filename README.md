@@ -18,7 +18,7 @@ A cross-platform terminal UI (TUI) text transformation tool inspired by [Boop](h
 - **Script Validation** – Check user scripts for metadata and entrypoint issues
 - **Script Manager Commands** – Reload scripts, show the user rips path, create starter rips, and inspect issues
 - **Syntax Highlighting** – Auto-detect language or run Detect Language
-- **Save & Undo** – Save with `Ctrl+S`, undo/redo transforms with `Ctrl+Z`
+- **Save & History** – Save with `Ctrl+S`, undo/redo transforms, and re-run recent history
 - **Editor QoL** – Find (`Ctrl+F`), go to line (`Ctrl+G`), line numbers, word wrap
 - **Keyboard-First** – Designed for fast, mouse-free workflows
 
@@ -64,7 +64,8 @@ riptext myfile.txt
 | `Ctrl+E` | Mark active selection/current line as a transform target |
 | `Ctrl+U` | Clear marked transform targets |
 | `Ctrl+S` | Save file |
-| `Ctrl+Z` | Undo/redo last transform |
+| `Ctrl+Z` | Undo transform |
+| `Ctrl+Y` | Redo transform |
 | `Ctrl+F` | Find text |
 | `Ctrl+G` | Go to line |
 | `Ctrl+N` | Toggle line numbers |
@@ -80,6 +81,8 @@ Script management is available from the command palette:
 - `Settings: Validate scripts`
 - `Macros: Show saved macros`
 - `Macros: Preview/Rename/Favorite/Delete <macro>`
+- `History: Show transform history`
+- `History: Re-run <transform>`
 
 ### Selection Modes
 
