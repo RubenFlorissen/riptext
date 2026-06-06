@@ -4,7 +4,8 @@
   "slug": "wrap_lines",
   "description": "Wrap text at 80 characters",
   "tags": ["wrap", "format", "lines"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Lines"
 }
 """
 

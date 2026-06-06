@@ -4,7 +4,8 @@
   "slug": "count_stats",
   "description": "Count characters, words, and lines",
   "tags": ["count", "words", "lines", "stats"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Analysis"
 }
 """
 

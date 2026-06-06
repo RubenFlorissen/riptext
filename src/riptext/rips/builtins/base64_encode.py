@@ -4,7 +4,8 @@
   "slug": "base64_encode",
   "description": "Encode text as Base64",
   "tags": ["encoding", "base64"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Encoding"
 }
 """
 

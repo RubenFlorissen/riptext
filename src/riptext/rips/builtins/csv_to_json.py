@@ -4,7 +4,8 @@
   "slug": "csv_to_json",
   "description": "Convert CSV to JSON array",
   "tags": ["csv", "json", "convert"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Data"
 }
 """
 

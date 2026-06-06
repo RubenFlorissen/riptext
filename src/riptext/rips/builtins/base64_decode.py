@@ -4,7 +4,8 @@
   "slug": "base64_decode",
   "description": "Decode Base64 text",
   "tags": ["encoding", "base64"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Encoding"
 }
 """
 

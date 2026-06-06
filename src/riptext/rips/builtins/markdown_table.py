@@ -4,7 +4,8 @@
   "slug": "markdown_table",
   "description": "Convert CSV/TSV to Markdown table",
   "tags": ["markdown", "table", "csv", "format"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Formatting"
 }
 """
 

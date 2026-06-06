@@ -25,9 +25,11 @@ class ScriptMetadata:
     bias: float
     path: Path
     source: str
+    category: str = "Other"
 
     def search_tokens(self) -> Iterable[str]:
         yield self.name
         yield self.slug
         yield self.description
         yield " ".join(self.tags)
+        yield self.category

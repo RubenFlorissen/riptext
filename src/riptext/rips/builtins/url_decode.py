@@ -4,7 +4,8 @@
   "slug": "url_decode",
   "description": "Decode URL-encoded text",
   "tags": ["encoding", "url"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Encoding"
 }
 """
 

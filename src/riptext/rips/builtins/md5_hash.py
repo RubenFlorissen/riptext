@@ -4,7 +4,8 @@
   "slug": "md5_hash",
   "description": "Calculate MD5 hash of text",
   "tags": ["hash", "crypto", "md5"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Hashing"
 }
 """
 

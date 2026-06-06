@@ -4,7 +4,8 @@
   "slug": "sha256_hash",
   "description": "Calculate SHA256 hash of text",
   "tags": ["hash", "crypto", "sha256"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Hashing"
 }
 """
 

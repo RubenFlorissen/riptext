@@ -4,7 +4,8 @@
   "slug": "snake_case",
   "description": "Convert to snake_case",
   "tags": ["case", "snake", "format"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Text Case"
 }
 """
 

@@ -4,7 +4,8 @@
   "slug": "sort_lines",
   "description": "Sort lines alphabetically",
   "tags": ["text", "lines", "sort"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Lines"
 }
 """
 

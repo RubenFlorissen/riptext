@@ -4,7 +4,8 @@
   "slug": "remove_duplicates",
   "description": "Remove duplicate lines, keeping first occurrence",
   "tags": ["text", "lines", "duplicates"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Lines"
 }
 """
 

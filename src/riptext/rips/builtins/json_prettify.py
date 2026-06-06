@@ -4,7 +4,8 @@
   "slug": "json_prettify",
   "description": "Pretty-print JSON",
   "tags": ["json", "format"],
-  "bias": 0.1
+  "bias": 0.1,
+  "category": "Data"
 }
 """
 

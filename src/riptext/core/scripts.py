@@ -8,6 +8,37 @@ from typing import Iterable
 from .models import ScriptMetadata
 from .search import rank_scripts
 
+# Category inference from tags
+_TAG_CATEGORY_MAP: dict[str, str] = {
+    "json": "Data",
+    "csv": "Data",
+    "xml": "Data",
+    "yaml": "Data",
+    "format": "Formatting",
+    "case": "Text Case",
+    "encode": "Encoding",
+    "decode": "Encoding",
+    "base64": "Encoding",
+    "url": "Encoding",
+    "hash": "Hashing",
+    "lines": "Lines",
+    "sort": "Lines",
+    "stats": "Analysis",
+    "count": "Analysis",
+    "markdown": "Formatting",
+    "text": "Text",
+    "transform": "Text",
+}
+
+
+def _infer_category(tags: tuple[str, ...]) -> str:
+    """Infer a category from tags. Uses first matching tag."""
+    for tag in tags:
+        tag_lower = tag.lower()
+        if tag_lower in _TAG_CATEGORY_MAP:
+            return _TAG_CATEGORY_MAP[tag_lower]
+    return "Other"
+
 
 def _parse_metadata(text: str) -> dict:
     try:
@@ -32,6 +63,7 @@ def _metadata_from_path(path: Path, source: str) -> ScriptMetadata:
     description = str(meta.get("description") or "")
     tags = tuple(meta.get("tags") or [])
     bias = float(meta.get("bias") or 0.0)
+    category = str(meta.get("category") or _infer_category(tags))
 
     return ScriptMetadata(
         name=name,
@@ -41,6 +73,7 @@ def _metadata_from_path(path: Path, source: str) -> ScriptMetadata:
         bias=bias,
         path=path,
         source=source,
+        category=category,
     )
 
 

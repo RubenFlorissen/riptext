@@ -4,7 +4,8 @@
   "slug": "trim",
   "description": "Remove leading and trailing whitespace",
   "tags": ["text", "whitespace"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Lines"
 }
 """
 

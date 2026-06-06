@@ -4,7 +4,8 @@
   "slug": "lowercase",
   "description": "Convert text to lowercase",
   "tags": ["text", "case"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Text Case"
 }
 """
 

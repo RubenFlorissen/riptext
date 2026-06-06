@@ -4,7 +4,8 @@
   "slug": "detect_language",
   "description": "Auto-detect and apply syntax highlighting",
   "tags": ["syntax", "language", "highlight"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Utility"
 }
 """
 

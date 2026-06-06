@@ -4,7 +4,8 @@
   "slug": "kebab_case",
   "description": "Convert to kebab-case",
   "tags": ["case", "kebab", "format"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Text Case"
 }
 """
 

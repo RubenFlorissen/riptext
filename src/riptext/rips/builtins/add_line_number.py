@@ -4,7 +4,8 @@
   "slug": "add_line_numbers",
   "description": "Prefix each line with its number",
   "tags": ["text", "lines"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Lines"
 }
 """
 

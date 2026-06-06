@@ -4,7 +4,8 @@
   "slug": "uppercase",
   "description": "Convert text to uppercase",
   "tags": ["text", "case"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Text Case"
 }
 """
 

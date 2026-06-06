@@ -4,7 +4,8 @@
   "slug": "json_minify",
   "description": "Minify JSON by removing whitespace",
   "tags": ["json", "minify", "compact"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Data"
 }
 """
 

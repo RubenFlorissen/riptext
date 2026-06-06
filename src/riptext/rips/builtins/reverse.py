@@ -4,7 +4,8 @@
   "slug": "reverse",
   "description": "Reverse the text",
   "tags": ["text"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Text"
 }
 """
 

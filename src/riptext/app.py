@@ -14,6 +14,8 @@ from .commands import RipCommandProvider
 from .core.execution import run_script
 from .core.models import ScriptMetadata
 from .core.scripts import ScriptIndex, load_all_scripts
+from .favorites import add_recent, toggle_favorite
+from .macros import save_macro
 from .save import handle_save_submit, toggle_save_input
 from .selection import (
     MODE_LABELS,
@@ -37,6 +39,8 @@ class RiptextApp(App):
     #find-input.visible { display: block; }
     #goto-input { display: none; height: auto; margin: 0; padding: 0; }
     #goto-input.visible { display: block; }
+    #macro-input { display: none; height: auto; margin: 0; padding: 0; }
+    #macro-input.visible { display: block; }
     """
 
     COMMANDS = App.COMMANDS | {RipCommandProvider}
@@ -51,6 +55,8 @@ class RiptextApp(App):
         Binding("ctrl+n", "toggle_line_numbers", "Toggle line numbers", priority=True),
         Binding("ctrl+w", "toggle_word_wrap", "Toggle word wrap", priority=True),
         Binding("ctrl+z", "undo_transform", "Undo last transform", priority=True),
+        Binding("ctrl+d", "toggle_favorite", "Toggle favorite", priority=True),
+        Binding("ctrl+m", "start_macro", "Record/save macro", priority=True),
         Binding("ctrl+x", "quit", "Quit", priority=True),
         Binding("ctrl+q", "noop", show=False),
     ]
@@ -72,6 +78,8 @@ class RiptextApp(App):
         self._pre_transform_text: str | None = None
         self._debug_keys = os.environ.get("RIPTEXT_DEBUG_KEYS") == "1"
         self._selection_mode: SelectionMode = "full"
+        self._macro_recording: list[str] = []
+        self._is_recording_macro = False
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -83,6 +91,7 @@ class RiptextApp(App):
         yield Input(value=default_path, placeholder="File path to save...", id="save-input")
         yield Input(placeholder="Find text...", id="find-input")
         yield Input(placeholder="Go to line number...", id="goto-input")
+        yield Input(placeholder="Macro name (Enter to save)...", id="macro-input")
         yield Label("", id="status")
 
     def on_mount(self) -> None:
@@ -109,7 +118,7 @@ class RiptextApp(App):
             self._set_status(f"Key: {event.key} {event.character or ''}".strip())
 
         # Handle Escape in overlay inputs
-        for input_id in ["#save-input", "#find-input", "#goto-input"]:
+        for input_id in ["#save-input", "#find-input", "#goto-input", "#macro-input"]:
             inp = self.query_one(input_id, Input)
             if inp.has_class("visible") and event.key == "escape":
                 inp.remove_class("visible")
@@ -146,7 +155,10 @@ class RiptextApp(App):
         
         elif event.input.id == "goto-input":
             self._do_goto_line(event.value, editor)
-        
+
+        elif event.input.id == "macro-input":
+            self._save_macro(event.value)
+
         event.input.remove_class("visible")
         editor.focus()
 
@@ -226,7 +238,7 @@ class RiptextApp(App):
 
     def _hide_all_inputs(self) -> None:
         """Hide all overlay inputs."""
-        for input_id in ["#save-input", "#find-input", "#goto-input"]:
+        for input_id in ["#save-input", "#find-input", "#goto-input", "#macro-input"]:
             self.query_one(input_id, Input).remove_class("visible")
 
     def _do_find(self, query: str, editor: TextArea) -> None:
@@ -271,6 +283,49 @@ class RiptextApp(App):
         editor.cursor_location = (line_num - 1, 0)
         self._set_status(f"Jumped to line {line_num}", auto_clear=True)
 
+    def action_toggle_favorite(self) -> None:
+        """Toggle the last-run script as favorite."""
+        if self._last_script is None:
+            self._set_status("Run a script first to favorite it.", error=True, auto_clear=True)
+            return
+        is_fav = toggle_favorite(self._last_script.slug)
+        star = "★ Favorited" if is_fav else "☆ Unfavorited"
+        self._set_status(f"{star}: {self._last_script.name}", auto_clear=True)
+
+    def action_start_macro(self) -> None:
+        """Toggle macro recording or save a recorded macro."""
+        if not self._is_recording_macro:
+            self._is_recording_macro = True
+            self._macro_recording = []
+            self._set_status("🔴 Recording macro… Run scripts, then Ctrl+M to save.")
+        else:
+            if not self._macro_recording:
+                self._is_recording_macro = False
+                self._set_status("Macro cancelled (no scripts recorded).", auto_clear=True)
+                return
+            # Show input to name the macro
+            self._hide_all_inputs()
+            macro_input = self.query_one("#macro-input", Input)
+            macro_input.value = ""
+            macro_input.add_class("visible")
+            macro_input.focus()
+            self._set_status(
+                f"Name this macro ({len(self._macro_recording)} scripts recorded):"
+            )
+
+    def _save_macro(self, name: str) -> None:
+        """Save the recorded macro."""
+        self._is_recording_macro = False
+        if not name.strip():
+            self._set_status("Macro cancelled.", auto_clear=True)
+            return
+        path = save_macro(name.strip(), self._macro_recording)
+        self._set_status(
+            f"Saved macro '{name}' ({len(self._macro_recording)} scripts) → {path}",
+            auto_clear=True,
+        )
+        self._macro_recording = []
+
     # -------------------------------------------------------------------------
     # Scripts
     # -------------------------------------------------------------------------
@@ -303,12 +358,51 @@ class RiptextApp(App):
         editor.text = new_text
         self._last_script = script
 
+        # Track usage
+        add_recent(script.slug)
+        if self._is_recording_macro:
+            self._macro_recording.append(script.slug)
+
         if errors:
             self._set_status(errors[-1], error=True, auto_clear=True)
         elif info:
             self._set_status(info[-1], auto_clear=True)
         else:
-            self._set_status(f"Ran {script.name}.", auto_clear=True)
+            rec = " 🔴" if self._is_recording_macro else ""
+            self._set_status(f"Ran {script.name}.{rec}", auto_clear=True)
+
+    def run_macro(self, slugs: list[str]) -> None:
+        """Run a sequence of scripts (macro)."""
+        editor = self.query_one("#editor", TextArea)
+        text = editor.text
+        self._pre_transform_text = text
+
+        all_errors: list[str] = []
+        ran = 0
+        for slug in slugs:
+            script = self._find_script_by_slug(slug)
+            if not script:
+                all_errors.append(f"Script '{slug}' not found")
+                continue
+            selections = get_selections(editor, self._selection_mode)
+            new_text, _, errors = run_script(script, editor.text, selections)
+            editor.text = new_text
+            all_errors.extend(errors)
+            ran += 1
+
+        if all_errors:
+            self._set_status(all_errors[-1], error=True, auto_clear=True)
+        else:
+            self._set_status(f"Macro complete ({ran} scripts).", auto_clear=True)
+
+    def _find_script_by_slug(self, slug: str) -> ScriptMetadata | None:
+        """Find a script by slug."""
+        if not self._index:
+            return None
+        for s in self._index.scripts:
+            if s.slug == slug:
+                return s
+        return None
 
     def _run_detect_language(self, editor: TextArea) -> None:
         """Handle the detect_language special script."""
@@ -360,6 +454,18 @@ class RiptextApp(App):
             "Settings: Run last rip",
             "Re-run the most recently executed script (Ctrl+R)",
             self.action_run_last,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Settings: Toggle favorite",
+            "Toggle last-run script as favorite (Ctrl+D)",
+            self.action_toggle_favorite,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Settings: Record/save macro",
+            "Start/stop macro recording (Ctrl+M)",
+            self.action_start_macro,
             discover=False,
         )
 

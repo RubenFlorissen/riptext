@@ -4,7 +4,8 @@
   "slug": "url_encode",
   "description": "URL-encode text (percent encoding)",
   "tags": ["encoding", "url"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Encoding"
 }
 """
 

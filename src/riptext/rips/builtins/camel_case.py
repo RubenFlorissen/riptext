@@ -4,7 +4,8 @@
   "slug": "camel_case",
   "description": "Convert to camelCase",
   "tags": ["case", "camel", "format"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Text Case"
 }
 """
 

@@ -10,8 +10,13 @@ A cross-platform terminal UI (TUI) text transformation tool inspired by [Boop](h
 - **Command Palette** – Fuzzy search through available transformations with `Ctrl+B`
 - **Selection-Aware** – Transforms apply to your selection, current line, or full text
 - **Auto Mode Switching** – Automatically detects when you select text
-- **Built-in Scripts** – 13 common transformations out of the box
+- **Built-in Scripts** – 26 transformations organized in 9 categories
 - **User Scripts** – Drop Python scripts in `~/.riptext/rips/` to extend functionality
+- **Favorites & Recent** – Favorite scripts with `Ctrl+D`, recently used scripts are boosted
+- **Macros** – Record chains of transforms with `Ctrl+M` and replay them
+- **Syntax Highlighting** – Auto-detect language or run Detect Language
+- **Save & Undo** – Save with `Ctrl+S`, undo/redo transforms with `Ctrl+Z`
+- **Editor QoL** – Find (`Ctrl+F`), go to line (`Ctrl+G`), line numbers, word wrap
 - **Keyboard-First** – Designed for fast, mouse-free workflows
 
 ## Installation
@@ -51,6 +56,14 @@ riptext myfile.txt
 | `Ctrl+B` | Open command palette |
 | `Ctrl+R` | Re-run last script |
 | `Ctrl+L` | Cycle selection mode (Full → Line → Selection) |
+| `Ctrl+D` | Toggle favorite on last-run script |
+| `Ctrl+M` | Start/stop macro recording |
+| `Ctrl+S` | Save file |
+| `Ctrl+Z` | Undo/redo last transform |
+| `Ctrl+F` | Find text |
+| `Ctrl+G` | Go to line |
+| `Ctrl+N` | Toggle line numbers |
+| `Ctrl+W` | Toggle word wrap |
 | `Ctrl+X` | Quit |
 
 ### Selection Modes
@@ -59,23 +72,19 @@ riptext myfile.txt
 - **Current line** – Transform only the line where the cursor is
 - **Selection** – Transform only the selected text (auto-activates when you select)
 
-## Built-in Scripts
+## Built-in Scripts (26)
 
-| Script | Description |
-|--------|-------------|
-| Uppercase | Convert text to UPPERCASE |
-| Lowercase | Convert text to lowercase |
-| JSON Prettify | Format JSON with indentation |
-| Add Line Numbers | Prefix each line with its number |
-| Base64 Encode | Encode text as Base64 |
-| Base64 Decode | Decode Base64 to text |
-| URL Encode | Percent-encode for URLs |
-| URL Decode | Decode percent-encoded text |
-| Trim | Remove leading/trailing whitespace |
-| Sort Lines | Sort lines alphabetically |
-| Reverse | Reverse the text |
-| Reverse Lines | Reverse the order of lines |
-| Remove Duplicates | Remove duplicate lines |
+| Category | Scripts |
+|----------|---------|
+| **Text Case** | Uppercase, Lowercase, Title Case, camelCase, snake_case, kebab-case |
+| **Data** | JSON Prettify, JSON Minify, CSV to JSON, JSON to CSV |
+| **Encoding** | Base64 Encode/Decode, URL Encode/Decode |
+| **Lines** | Sort, Reverse, Remove Duplicates, Add Line Numbers, Trim, Wrap Lines |
+| **Hashing** | MD5, SHA256 |
+| **Analysis** | Count Stats (lines, words, chars) |
+| **Formatting** | Markdown Table |
+| **Text** | Reverse Text |
+| **Utility** | Detect Language |
 
 ## Custom Scripts
 
@@ -88,6 +97,7 @@ Create Python scripts in `~/.riptext/rips/` with a JSON metadata docstring:
   "slug": "my_transform",
   "description": "Does something cool",
   "tags": ["custom", "example"],
+  "category": "Custom",
   "bias": 0.0
 }
 """

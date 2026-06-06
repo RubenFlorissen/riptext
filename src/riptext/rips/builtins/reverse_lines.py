@@ -4,7 +4,8 @@
   "slug": "reverse_lines",
   "description": "Reverse the order of lines",
   "tags": ["text", "lines"],
-  "bias": 0.0
+  "bias": 0.0,
+  "category": "Lines"
 }
 """
 
