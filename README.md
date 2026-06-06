@@ -9,6 +9,7 @@ A cross-platform terminal UI (TUI) text transformation tool inspired by [Boop](h
 
 - **Command Palette** – Fuzzy search through available transformations with `Ctrl+B`
 - **Selection-Aware** – Transforms apply to your selection, current line, or full text
+- **Marked Multi-Selection** – Mark multiple ranges with `Ctrl+E`, then run one rip across all of them
 - **Auto Mode Switching** – Automatically detects when you select text
 - **Built-in Scripts** – 26 transformations organized in 9 categories
 - **User Scripts** – Drop Python scripts in `~/.riptext/rips/` to extend functionality
@@ -58,6 +59,8 @@ riptext myfile.txt
 | `Ctrl+L` | Cycle selection mode (Full → Line → Selection) |
 | `Ctrl+D` | Toggle favorite on last-run script |
 | `Ctrl+M` | Start/stop macro recording |
+| `Ctrl+E` | Mark active selection/current line as a transform target |
+| `Ctrl+U` | Clear marked transform targets |
 | `Ctrl+S` | Save file |
 | `Ctrl+Z` | Undo/redo last transform |
 | `Ctrl+F` | Find text |
@@ -71,6 +74,7 @@ riptext myfile.txt
 - **Full text** – Transform the entire document
 - **Current line** – Transform only the line where the cursor is
 - **Selection** – Transform only the selected text (auto-activates when you select)
+- **Marked ranges** – Press `Ctrl+E` to collect multiple independent ranges. The next rip runs on all marked ranges, then clears them.
 
 ## Built-in Scripts (26)
 

@@ -15,6 +15,5 @@ def main(exec):
     chars = len(text)
     words = len(text.split())
     lines = text.count("\n") + (1 if text else 0)
-    
-    result = f"Characters: {chars}\nWords: {words}\nLines: {lines}"
-    exec.insert(result)
+
+    exec.post_info(f"Characters: {chars} | Words: {words} | Lines: {lines}")

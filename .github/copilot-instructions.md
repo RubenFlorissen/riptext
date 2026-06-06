@@ -49,6 +49,8 @@ uv run riptext [file]
 - Ctrl+L: Cycle selection mode
 - Ctrl+D: Toggle favorite
 - Ctrl+M: Record/save macro
+- Ctrl+E: Mark active selection/current line as a transform target
+- Ctrl+U: Clear marked transform targets
 - Ctrl+S: Save file
 - Ctrl+Z: Undo/redo transform
 - Ctrl+F/G/N/W: Find, goto line, line numbers, word wrap

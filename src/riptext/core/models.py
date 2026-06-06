@@ -15,6 +15,14 @@ class SelectionRange:
             return self
         return SelectionRange(self.end, self.start)
 
+    def is_empty(self) -> bool:
+        return self.start == self.end
+
+    def overlaps(self, other: "SelectionRange") -> bool:
+        current = self.normalized()
+        candidate = other.normalized()
+        return current.start < candidate.end and candidate.start < current.end
+
 
 @dataclass(frozen=True)
 class ScriptMetadata:

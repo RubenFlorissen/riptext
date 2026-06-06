@@ -12,7 +12,7 @@ from textual.widgets import Input, Label, TextArea
 
 from .commands import RipCommandProvider
 from .core.execution import run_script
-from .core.models import ScriptMetadata
+from .core.models import ScriptMetadata, SelectionRange
 from .core.scripts import ScriptIndex, load_all_scripts
 from .favorites import add_recent, toggle_favorite
 from .macros import save_macro
@@ -20,8 +20,12 @@ from .save import handle_save_submit, toggle_save_input
 from .selection import (
     MODE_LABELS,
     SelectionMode,
+    can_add_range,
     cycle_mode,
+    current_line_selection,
+    current_selection,
     get_selections,
+    normalize_ranges,
 )
 from .syntax import detect_language
 
@@ -57,6 +61,13 @@ class RiptextApp(App):
         Binding("ctrl+z", "undo_transform", "Undo last transform", priority=True),
         Binding("ctrl+d", "toggle_favorite", "Toggle favorite", priority=True),
         Binding("ctrl+m", "start_macro", "Record/save macro", priority=True),
+        Binding("ctrl+e", "mark_selection", "Mark selection", priority=True),
+        Binding(
+            "ctrl+u",
+            "clear_marked_selections",
+            "Clear marked selections",
+            priority=True,
+        ),
         Binding("ctrl+x", "quit", "Quit", priority=True),
         Binding("ctrl+q", "noop", show=False),
     ]
@@ -80,6 +91,9 @@ class RiptextApp(App):
         self._selection_mode: SelectionMode = "full"
         self._macro_recording: list[str] = []
         self._is_recording_macro = False
+        self._marked_selections: list[SelectionRange] = []
+        self._applying_transform = False
+        self._status_version = 0
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -139,20 +153,27 @@ class RiptextApp(App):
             self._selection_mode = "full"
             self._show_mode()
 
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        """Clear marked selections when manual edits may invalidate offsets."""
+        if self._applying_transform or not self._marked_selections:
+            return
+        self._marked_selections = []
+        self._set_status("Cleared marked selections after text edit.", auto_clear=True)
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle input submissions."""
         editor = self.query_one("#editor", TextArea)
-        
+
         if event.input.id == "save-input":
             new_path = handle_save_submit(
                 event.value, self._cwd, editor, self._set_status
             )
             if new_path:
                 self._file_path = new_path
-        
+
         elif event.input.id == "find-input":
             self._do_find(event.value, editor)
-        
+
         elif event.input.id == "goto-input":
             self._do_goto_line(event.value, editor)
 
@@ -181,6 +202,40 @@ class RiptextApp(App):
     def action_cycle_mode(self) -> None:
         self._selection_mode = cycle_mode(self._selection_mode)
         self._show_mode()
+
+    def action_mark_selection(self) -> None:
+        """Add the active selection, or current line, to marked selections."""
+        editor = self.query_one("#editor", TextArea)
+        candidate = current_selection(editor) or current_line_selection(editor)
+        can_add, reason = can_add_range(self._marked_selections, candidate)
+        if not can_add:
+            self._set_status(
+                reason or "Selection could not be marked.",
+                error=True,
+                auto_clear=True,
+            )
+            return
+        self._marked_selections = normalize_ranges(
+            [*self._marked_selections, candidate]
+        )
+        count = len(self._marked_selections)
+        self._set_status(
+            f"Marked selection {count}. Run a rip to transform marked ranges.",
+            auto_clear=True,
+        )
+
+    def action_clear_marked_selections(self) -> None:
+        """Clear all marked selections."""
+        if not self._marked_selections:
+            self._set_status(
+                "No marked selections to clear.",
+                error=True,
+                auto_clear=True,
+            )
+            return
+        count = len(self._marked_selections)
+        self._marked_selections = []
+        self._set_status(f"Cleared {count} marked selections.", auto_clear=True)
 
     def action_undo_transform(self) -> None:
         """Revert to text before last transform."""
@@ -353,10 +408,21 @@ class RiptextApp(App):
 
         text = editor.text
         self._pre_transform_text = text
-        selections = get_selections(editor, self._selection_mode)
+        selections = get_selections(
+            editor,
+            self._selection_mode,
+            self._marked_selections,
+        )
+        marked_count = len(self._marked_selections)
         new_text, info, errors = run_script(script, text, selections)
-        editor.text = new_text
+        self._applying_transform = True
+        try:
+            editor.text = new_text
+        finally:
+            self._applying_transform = False
         self._last_script = script
+        if marked_count:
+            self._marked_selections = []
 
         # Track usage
         add_recent(script.slug)
@@ -366,10 +432,11 @@ class RiptextApp(App):
         if errors:
             self._set_status(errors[-1], error=True, auto_clear=True)
         elif info:
-            self._set_status(info[-1], auto_clear=True)
+            self._set_status(info[-1], auto_clear=6.0)
         else:
             rec = " 🔴" if self._is_recording_macro else ""
-            self._set_status(f"Ran {script.name}.{rec}", auto_clear=True)
+            target = f" on {marked_count} selections" if marked_count else ""
+            self._set_status(f"Ran {script.name}{target}.{rec}", auto_clear=True)
 
     def run_macro(self, slugs: list[str]) -> None:
         """Run a sequence of scripts (macro)."""
@@ -379,14 +446,32 @@ class RiptextApp(App):
 
         all_errors: list[str] = []
         ran = 0
+        if self._marked_selections and len(slugs) > 1:
+            self._set_status(
+                "Marked selections currently support one rip at a time, not macros.",
+                error=True,
+                auto_clear=True,
+            )
+            return
         for slug in slugs:
             script = self._find_script_by_slug(slug)
             if not script:
                 all_errors.append(f"Script '{slug}' not found")
                 continue
-            selections = get_selections(editor, self._selection_mode)
+            selections = get_selections(
+                editor,
+                self._selection_mode,
+                self._marked_selections,
+            )
+            marked_count = len(self._marked_selections)
             new_text, _, errors = run_script(script, editor.text, selections)
-            editor.text = new_text
+            self._applying_transform = True
+            try:
+                editor.text = new_text
+            finally:
+                self._applying_transform = False
+            if marked_count:
+                self._marked_selections = []
             all_errors.extend(errors)
             ran += 1
 
@@ -427,16 +512,31 @@ class RiptextApp(App):
     # -------------------------------------------------------------------------
 
     def _set_status(
-        self, message: str, *, error: bool = False, auto_clear: bool = False
+        self, message: str, *, error: bool = False, auto_clear: bool | float = False
     ) -> None:
+        self._status_version += 1
+        status_version = self._status_version
         label = self.query_one("#status", Label)
         label.update(message)
         label.styles.color = "red" if error else "white"
         if auto_clear:
-            self.set_timer(2.0, self._show_mode)
+            delay = 2.0 if auto_clear is True else float(auto_clear)
+
+            def clear_if_current() -> None:
+                if self._status_version == status_version:
+                    self._show_mode()
+
+            self.set_timer(delay, clear_if_current)
 
     def _show_mode(self) -> None:
-        self._set_status(f"Mode: {MODE_LABELS[self._selection_mode]} (Ctrl+L to change)")
+        marked = (
+            f" | Marked: {len(self._marked_selections)}"
+            if self._marked_selections
+            else ""
+        )
+        self._set_status(
+            f"Mode: {MODE_LABELS[self._selection_mode]}{marked} (Ctrl+L to change)"
+        )
 
     # -------------------------------------------------------------------------
     # System commands
@@ -466,6 +566,18 @@ class RiptextApp(App):
             "Settings: Record/save macro",
             "Start/stop macro recording (Ctrl+M)",
             self.action_start_macro,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Settings: Mark selection",
+            "Add active selection, or current line, to marked transform ranges (Ctrl+E)",
+            self.action_mark_selection,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Settings: Clear marked selections",
+            "Clear all marked transform ranges (Ctrl+U)",
+            self.action_clear_marked_selections,
             discover=False,
         )
 
