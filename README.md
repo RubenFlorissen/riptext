@@ -12,7 +12,7 @@ A cross-platform terminal UI (TUI) text transformation tool inspired by [Boop](h
 - **Selection-Aware** – Transforms apply to your selection, current line, or full text
 - **Marked Multi-Selection** – Mark multiple ranges with `Ctrl+E`, then run one rip across all of them
 - **Auto Mode Switching** – Automatically detects when you select text
-- **Built-in Scripts** – 38 transformations organized in 9 categories
+- **Built-in Scripts** – 40 transformations organized in 9 categories
 - **User Scripts** – Drop Python scripts in `~/.riptext/rips/` to extend functionality
 - **Favorites & Recent** – Favorite scripts with `Ctrl+D`, recently used scripts are boosted
 - **Macros** – Record, preview, favorite, rename, delete, and replay transform chains
@@ -92,12 +92,12 @@ Script management is available from the command palette:
 - **Selection** – Transform only the selected text (auto-activates when you select)
 - **Marked ranges** – Press `Ctrl+E` to collect multiple independent ranges. The next rip or macro runs on all marked ranges, then clears them.
 
-## Built-in Scripts (38)
+## Built-in Scripts (40)
 
 | Category | Scripts |
 |----------|---------|
 | **Text Case** | Uppercase, Lowercase, Title Case, camelCase, snake_case, kebab-case, Slugify |
-| **Data** | JSON Prettify, JSON Minify, CSV to JSON, JSON to CSV, XML Prettify/Minify, JWT Decode |
+| **Data** | JSON Prettify, JSON Minify, CSV to JSON, JSON to CSV, YAML to JSON, JSON to YAML, XML Prettify/Minify, JWT Decode |
 | **Encoding** | Base64 Encode/Decode, URL Encode/Decode, HTML Escape/Unescape |
 | **Lines** | Sort, Reverse, Remove Duplicates, Add Line Numbers, Trim, Wrap Lines |
 | **Hashing** | MD5, SHA256 |

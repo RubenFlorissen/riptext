@@ -21,6 +21,7 @@ Working list for future riptext improvements. Keep this practical: each item sho
   - Add `~/.riptext/config.toml` for user rips directory, default mode, keybindings, and display options.
 - [x] More built-in rips
   - XML prettify/minify.
+  - YAML/JSON conversion.
   - HTML escape/unescape.
   - JWT decode.
   - UUID generate.
@@ -45,6 +46,5 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 ## Next
 
-- [ ] YAML/JSON conversion
-  - Decide whether to add a YAML parser dependency or keep YAML conversion out of the dependency-free built-ins.
-  - YAML/JSON conversion.
+- [ ] Native-feeling multi-selection visual indicators
+  - Revisit when Textual exposes a stable range decoration or overlay API for `TextArea`.

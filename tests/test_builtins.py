@@ -54,6 +54,25 @@ class BuiltinRipTests(unittest.TestCase):
         self.assertEqual(unix_result, "1970-01-01T00:00:00+00:00")
         self.assertEqual(iso_result, "0")
 
+    def test_yaml_json_conversion_rips(self) -> None:
+        json_result, json_info, json_errors = run_script(
+            builtin("yaml_to_json"),
+            "name: riptext\ncount: 2\nitems:\n  - json\n  - yaml\n",
+            [],
+        )
+        yaml_result, yaml_info, yaml_errors = run_script(
+            builtin("json_to_yaml"),
+            '{"name": "riptext", "count": 2, "items": ["json", "yaml"]}',
+            [],
+        )
+
+        self.assertEqual(json_errors, [])
+        self.assertEqual(yaml_errors, [])
+        self.assertEqual(json_info, ["Converted YAML to JSON"])
+        self.assertEqual(yaml_info, ["Converted JSON to YAML"])
+        self.assertIn('"name": "riptext"', json_result)
+        self.assertIn("items:\n- json\n- yaml\n", yaml_result)
+
 
 if __name__ == "__main__":
     unittest.main()
