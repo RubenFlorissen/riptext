@@ -86,6 +86,12 @@ def _metadata_from_path(path: Path, source: str) -> ScriptMetadata:
         if isinstance(raw_tags, (list, tuple))
         else ()
     )
+    raw_aliases = meta.get("aliases") or []
+    aliases = (
+        tuple(str(alias) for alias in raw_aliases)
+        if isinstance(raw_aliases, (list, tuple))
+        else ()
+    )
     try:
         bias = float(meta.get("bias") or 0.0)
     except (TypeError, ValueError):
@@ -101,6 +107,7 @@ def _metadata_from_path(path: Path, source: str) -> ScriptMetadata:
         path=path,
         source=source,
         category=category,
+        aliases=aliases,
     )
 
 
@@ -202,6 +209,16 @@ def validate_scripts(user_dir: Path | None = None) -> list[ScriptDiagnostic]:
                 ScriptDiagnostic(
                     "warning",
                     "Script tags should be a JSON array.",
+                    path,
+                    source,
+                    script.slug,
+                )
+            )
+        if not isinstance(meta.get("aliases", []), list):
+            diagnostics.append(
+                ScriptDiagnostic(
+                    "warning",
+                    "Script aliases should be a JSON array.",
                     path,
                     source,
                     script.slug,

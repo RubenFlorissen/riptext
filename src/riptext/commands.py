@@ -12,6 +12,34 @@ from .macros import list_macros
 
 if TYPE_CHECKING:
     from .app import RiptextApp
+    from .core.models import ScriptMetadata
+
+
+def _script_group(script: "ScriptMetadata") -> str:
+    priority = get_script_priority(script.slug)
+    if priority[0] == 0:
+        return "Favorites"
+    if priority[2] < 999:
+        return "Recent"
+    return script.category
+
+
+def _script_display(script: "ScriptMetadata") -> str:
+    group = _script_group(script)
+    if group in {"Favorites", "Recent"}:
+        return f"{group}: [{script.category}] {script.name}"
+    return f"{group}: {script.name}"
+
+
+def _script_help(script: "ScriptMetadata") -> str | None:
+    parts = []
+    if script.description:
+        parts.append(script.description)
+    if script.tags:
+        parts.append(f"Tags: {', '.join(script.tags)}")
+    if script.aliases:
+        parts.append(f"Aliases: {', '.join(script.aliases)}")
+    return " | ".join(parts) or None
 
 
 class RipCommandProvider(Provider):
@@ -36,12 +64,10 @@ class RipCommandProvider(Provider):
         scripts.sort(key=lambda s: (*get_script_priority(s.slug), s.name.lower()))
 
         for script in scripts:
-            fav_rank = get_script_priority(script.slug)
-            prefix = "★ " if fav_rank[0] == 0 else ""
             yield DiscoveryHit(
-                display=f"{prefix}[{script.category}] {script.name}",
+                display=_script_display(script),
                 command=partial(app.run_script, script),
-                help=script.description or None,
+                help=_script_help(script),
             )
 
         # Macros
@@ -97,15 +123,20 @@ class RipCommandProvider(Provider):
 
         for script in app.scripts_for_commands():
             candidate = " ".join(
-                [script.name, script.slug, script.description,
-                 " ".join(script.tags), script.category]
+                [
+                    script.name,
+                    script.slug,
+                    script.description,
+                    " ".join(script.tags),
+                    " ".join(script.aliases),
+                    script.category,
+                ]
             ).strip()
             score = matcher.match(candidate)
             if score <= 0:
                 continue
-            fav_rank = get_script_priority(script.slug)
-            prefix = "★ " if fav_rank[0] == 0 else ""
             # Boost favorites and recent in search results
+            fav_rank = get_script_priority(script.slug)
             if fav_rank[0] == 0:
                 score += 20  # favorite boost
             elif fav_rank[2] < 999:
@@ -113,9 +144,9 @@ class RipCommandProvider(Provider):
 
             yield Hit(
                 score,
-                matcher.highlight(f"{prefix}[{script.category}] {script.name}"),
+                matcher.highlight(_script_display(script)),
                 partial(app.run_script, script),
-                help=script.description or None,
+                help=_script_help(script),
             )
 
         # Macros

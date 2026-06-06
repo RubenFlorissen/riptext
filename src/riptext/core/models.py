@@ -34,6 +34,7 @@ class ScriptMetadata:
     path: Path
     source: str
     category: str = "Other"
+    aliases: tuple[str, ...] = ()
 
     def search_tokens(self) -> Iterable[str]:
         yield self.name
@@ -41,6 +42,7 @@ class ScriptMetadata:
         yield self.description
         yield " ".join(self.tags)
         yield self.category
+        yield " ".join(self.aliases)
 
 
 @dataclass(frozen=True)

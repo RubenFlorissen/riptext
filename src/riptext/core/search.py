@@ -47,8 +47,9 @@ def rank_scripts(
             name_score = _score_field(query, script.name) * 3.0
             slug_score = _score_field(query, script.slug) * 2.0
             tag_score = _score_field(query, " ".join(script.tags)) * 2.0
+            alias_score = _score_field(query, " ".join(script.aliases)) * 2.5
             desc_score = _score_field(query, script.description)
-            score = name_score + slug_score + tag_score + desc_score
+            score = name_score + slug_score + tag_score + alias_score + desc_score
         score += script.bias * 100.0
         if not query or score >= min_score:
             matches.append(ScriptMatch(script=script, score=score))

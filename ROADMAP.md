@@ -14,6 +14,9 @@ Working list for future riptext improvements. Keep this practical: each item sho
 - [x] Transform history
   - Multi-step undo/redo.
   - Re-run scripts from history.
+- [x] Better picker UX
+  - Category/recent/favorite grouping.
+  - Show tags and aliases.
 - [x] Script validation
   - Detect missing metadata, duplicate slugs, invalid JSON metadata, and missing entrypoints.
   - Expose validation through the command palette.
@@ -30,9 +33,6 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 ## Next
 
-- [ ] Better picker UX
-  - Category/recent/favorite grouping.
-  - Show tags and aliases.
 - [ ] Config file
   - Add `~/.riptext/config.toml` for user rips directory, default mode, keybindings, and display options.
 - [ ] More built-in rips

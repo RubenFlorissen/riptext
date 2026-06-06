@@ -58,6 +58,7 @@ def create_user_rip_template(
   "slug": "{final_slug}",
   "description": "Describe what this rip does",
   "tags": ["custom"],
+  "aliases": [],
   "category": "Custom",
   "bias": 0.0
 }}
