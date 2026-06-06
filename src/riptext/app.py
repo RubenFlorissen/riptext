@@ -12,11 +12,16 @@ from textual.widgets import Input, Label, TextArea
 
 from .commands import RipCommandProvider
 from .core.execution import run_script, run_script_sequence
-from .core.models import ScriptMetadata, SelectionRange
-from .core.scripts import ScriptIndex, load_all_scripts
+from .core.models import ScriptDiagnostic, ScriptMetadata, SelectionRange
+from .core.scripts import ScriptIndex, load_all_scripts, validate_scripts
 from .favorites import add_recent, toggle_favorite
 from .macros import save_macro
 from .save import handle_save_submit, toggle_save_input
+from .script_manager import (
+    create_user_rip_template,
+    ensure_user_scripts_dir,
+    format_script_diagnostic,
+)
 from .selection import (
     MODE_LABELS,
     SelectionMode,
@@ -94,6 +99,8 @@ class RiptextApp(App):
         self._marked_selections: list[SelectionRange] = []
         self._applying_transform = False
         self._status_version = 0
+        self._script_diagnostics: list[ScriptDiagnostic] = []
+        self._script_issue_index = 0
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -381,6 +388,79 @@ class RiptextApp(App):
         )
         self._macro_recording = []
 
+    def action_validate_scripts(self) -> None:
+        """Validate built-in and user scripts."""
+        self._script_diagnostics = validate_scripts(self._user_scripts_dir)
+        self._script_issue_index = 0
+        if not self._script_diagnostics:
+            self._set_status("All scripts validated cleanly.", auto_clear=True)
+            return
+
+        errors = sum(
+            diagnostic.severity == "error"
+            for diagnostic in self._script_diagnostics
+        )
+        warnings = sum(
+            diagnostic.severity == "warning"
+            for diagnostic in self._script_diagnostics
+        )
+        first = self._script_diagnostics[0]
+        self._set_status(
+            f"Scripts: {errors} errors, {warnings} warnings. "
+            f"First: {first.path.name}: {first.message}",
+            error=errors > 0,
+            auto_clear=8.0,
+        )
+
+    def action_show_script_issues(self) -> None:
+        """Show the next script validation issue."""
+        self._script_diagnostics = validate_scripts(self._user_scripts_dir)
+        if not self._script_diagnostics:
+            self._script_issue_index = 0
+            self._set_status("No script validation issues.", auto_clear=True)
+            return
+
+        self._script_issue_index %= len(self._script_diagnostics)
+        issue = self._script_diagnostics[self._script_issue_index]
+        self._script_issue_index += 1
+        self._set_status(
+            format_script_diagnostic(
+                issue,
+                index=self._script_issue_index,
+                total=len(self._script_diagnostics),
+            ),
+            error=issue.severity == "error",
+            auto_clear=10.0,
+        )
+
+    def action_reload_scripts(self) -> None:
+        """Reload built-in and user scripts."""
+        self._reload_scripts()
+        script_count = len(self._index.scripts) if self._index else 0
+        issue_count = len(self._script_diagnostics)
+        if issue_count:
+            self._set_status(
+                f"Reloaded {script_count} scripts with {issue_count} validation issues.",
+                error=any(
+                    diagnostic.severity == "error"
+                    for diagnostic in self._script_diagnostics
+                ),
+                auto_clear=8.0,
+            )
+        else:
+            self._set_status(f"Reloaded {script_count} scripts.", auto_clear=True)
+
+    def action_show_user_rips_dir(self) -> None:
+        """Show the user rips directory."""
+        user_dir = ensure_user_scripts_dir(self._user_scripts_dir)
+        self._set_status(f"User rips directory: {user_dir}", auto_clear=10.0)
+
+    def action_create_user_rip(self) -> None:
+        """Create a starter user rip template."""
+        path = create_user_rip_template(self._user_scripts_dir)
+        self._reload_scripts()
+        self._set_status(f"Created rip template: {path}", auto_clear=10.0)
+
     # -------------------------------------------------------------------------
     # Scripts
     # -------------------------------------------------------------------------
@@ -388,6 +468,8 @@ class RiptextApp(App):
     def _reload_scripts(self) -> None:
         scripts = load_all_scripts(self._user_scripts_dir)
         self._index = ScriptIndex(scripts)
+        self._script_diagnostics = validate_scripts(self._user_scripts_dir)
+        self._script_issue_index = 0
 
     def reload_scripts(self) -> None:
         """Public method for hot-reloading scripts."""
@@ -597,6 +679,36 @@ class RiptextApp(App):
             "Settings: Clear marked selections",
             "Clear all marked transform ranges (Ctrl+U)",
             self.action_clear_marked_selections,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Settings: Validate scripts",
+            "Check built-in and user scripts for metadata and entrypoint issues",
+            self.action_validate_scripts,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Scripts: Show script issues",
+            "Cycle through validation issues for built-in and user scripts",
+            self.action_show_script_issues,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Scripts: Reload scripts",
+            "Reload built-in and user rips from disk",
+            self.action_reload_scripts,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Scripts: Show user rips directory",
+            "Show the path where user rips are loaded from",
+            self.action_show_user_rips_dir,
+            discover=False,
+        )
+        yield SystemCommand(
+            "Scripts: Create user rip template",
+            "Create a starter Python rip in the user rips directory",
+            self.action_create_user_rip,
             discover=False,
         )
 

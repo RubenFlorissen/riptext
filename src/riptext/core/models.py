@@ -41,3 +41,12 @@ class ScriptMetadata:
         yield self.description
         yield " ".join(self.tags)
         yield self.category
+
+
+@dataclass(frozen=True)
+class ScriptDiagnostic:
+    severity: str
+    message: str
+    path: Path
+    source: str
+    slug: str | None = None

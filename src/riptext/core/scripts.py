@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from .models import ScriptMetadata
+from .models import ScriptDiagnostic, ScriptMetadata
 from .search import rank_scripts
 
 # Category inference from tags
@@ -40,29 +40,56 @@ def _infer_category(tags: tuple[str, ...]) -> str:
     return "Other"
 
 
-def _parse_metadata(text: str) -> dict:
+def _parse_module(text: str) -> ast.Module | None:
     try:
-        module = ast.parse(text)
+        return ast.parse(text)
     except SyntaxError:
-        return {}
+        return None
+
+
+def _parse_metadata(text: str) -> tuple[dict, str | None]:
+    module = _parse_module(text)
+    if module is None:
+        return {}, "Script has invalid Python syntax."
     docstring = ast.get_docstring(module)
     if not docstring:
-        return {}
+        return {}, "Script is missing JSON metadata docstring."
     try:
-        return json.loads(docstring)
-    except json.JSONDecodeError:
-        return {}
+        meta = json.loads(docstring)
+    except json.JSONDecodeError as exc:
+        return {}, f"Script metadata is invalid JSON: {exc.msg}."
+    if not isinstance(meta, dict):
+        return {}, "Script metadata must be a JSON object."
+    return meta, None
+
+
+def _has_entrypoint(text: str) -> bool:
+    module = _parse_module(text)
+    if module is None:
+        return False
+    for node in module.body:
+        if isinstance(node, ast.FunctionDef) and node.name in {"main", "transform"}:
+            return True
+    return False
 
 
 def _metadata_from_path(path: Path, source: str) -> ScriptMetadata:
     text = path.read_text(encoding="utf-8")
-    meta = _parse_metadata(text)
+    meta, _ = _parse_metadata(text)
 
     slug = str(meta.get("slug") or path.stem)
     name = str(meta.get("name") or slug.replace("_", " ").title())
     description = str(meta.get("description") or "")
-    tags = tuple(meta.get("tags") or [])
-    bias = float(meta.get("bias") or 0.0)
+    raw_tags = meta.get("tags") or []
+    tags = (
+        tuple(str(tag) for tag in raw_tags)
+        if isinstance(raw_tags, (list, tuple))
+        else ()
+    )
+    try:
+        bias = float(meta.get("bias") or 0.0)
+    except (TypeError, ValueError):
+        bias = 0.0
     category = str(meta.get("category") or _infer_category(tags))
 
     return ScriptMetadata(
@@ -117,6 +144,121 @@ def load_all_scripts(user_dir: Path | None = None) -> list[ScriptMetadata]:
     for script in load_user_scripts(user_dir):
         scripts[script.slug] = script
     return list(scripts.values())
+
+
+def validate_scripts(user_dir: Path | None = None) -> list[ScriptDiagnostic]:
+    """Validate script files and return diagnostics without executing scripts."""
+    if user_dir is None:
+        user_dir = Path.home() / ".riptext" / "rips"
+
+    _ensure_user_dir(user_dir)
+
+    diagnostics: list[ScriptDiagnostic] = []
+    seen_slugs: dict[str, ScriptMetadata] = {}
+
+    def validate_path(path: Path, source: str) -> ScriptMetadata | None:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            diagnostics.append(
+                ScriptDiagnostic(
+                    "error",
+                    f"Could not read script: {exc}",
+                    path,
+                    source,
+                )
+            )
+            return None
+
+        meta, metadata_error = _parse_metadata(text)
+        if metadata_error:
+            diagnostics.append(
+                ScriptDiagnostic("warning", metadata_error, path, source)
+            )
+
+        script = _metadata_from_path(path, source)
+        if not script.slug.strip():
+            diagnostics.append(
+                ScriptDiagnostic(
+                    "error",
+                    "Script slug cannot be empty.",
+                    path,
+                    source,
+                    script.slug,
+                )
+            )
+        if not script.name.strip():
+            diagnostics.append(
+                ScriptDiagnostic(
+                    "warning",
+                    "Script name is empty.",
+                    path,
+                    source,
+                    script.slug,
+                )
+            )
+        if not isinstance(meta.get("tags", []), list):
+            diagnostics.append(
+                ScriptDiagnostic(
+                    "warning",
+                    "Script tags should be a JSON array.",
+                    path,
+                    source,
+                    script.slug,
+                )
+            )
+        try:
+            float(meta.get("bias", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            diagnostics.append(
+                ScriptDiagnostic(
+                    "warning",
+                    "Script bias should be numeric.",
+                    path,
+                    source,
+                    script.slug,
+                )
+            )
+        if not _has_entrypoint(text):
+            diagnostics.append(
+                ScriptDiagnostic(
+                    "error",
+                    "Script has no main() or transform() entrypoint.",
+                    path,
+                    source,
+                    script.slug,
+                )
+            )
+
+        existing = seen_slugs.get(script.slug)
+        if existing is not None:
+            diagnostics.append(
+                ScriptDiagnostic(
+                    "warning",
+                    f"Duplicate slug '{script.slug}' also defined in {existing.path}.",
+                    path,
+                    source,
+                    script.slug,
+                )
+            )
+        seen_slugs[script.slug] = script
+        return script
+
+    try:
+        import riptext.rips.builtins as builtins_pkg
+    except ImportError:
+        package_dir = None
+    else:
+        package_dir = Path(builtins_pkg.__file__).parent
+
+    if package_dir is not None:
+        for path in _iter_script_paths(package_dir):
+            validate_path(path, "builtin")
+
+    for path in _iter_script_paths(user_dir):
+        validate_path(path, "user")
+
+    return diagnostics
 
 
 class ScriptIndex:

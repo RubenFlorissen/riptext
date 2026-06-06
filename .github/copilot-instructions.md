@@ -33,6 +33,8 @@ src/riptext/
 - Scripts use JSON metadata in module docstrings with fields: name, slug, description, tags, category, bias
 - Scripts implement `main(exec)` or `transform(text)` entry points
 - ScriptExecution provides: text, full_text, is_selection, insert(), post_info(), post_error()
+- Script validation reports missing metadata, invalid metadata JSON, duplicate slugs, and missing entrypoints
+- Script manager commands expose reload, user rips directory, template creation, and issue display
 - Categories are inferred from tags if not explicitly set in metadata
 - Favorites/recent state persisted to `~/.riptext/state.json`
 - Macros persisted as JSON in `~/.riptext/macros/`

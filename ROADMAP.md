@@ -8,6 +8,13 @@ Working list for future riptext improvements. Keep this practical: each item sho
   - Mark multiple independent ranges from the editor.
   - Run one rip across all marked ranges with safe in-place replacement.
   - Keep selection handling understandable in the status bar.
+- [x] Script validation
+  - Detect missing metadata, duplicate slugs, invalid JSON metadata, and missing entrypoints.
+  - Expose validation through the command palette.
+- [x] Script manager commands
+  - Show/reload user rips.
+  - Create a new rip from a template.
+  - Show invalid scripts and metadata errors.
 
 ## In Progress
 
@@ -17,10 +24,6 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 ## Next
 
-- [ ] Script manager commands
-  - Open/reload user rips.
-  - Create a new rip from a template.
-  - Show invalid scripts and metadata errors.
 - [ ] Macro improvements
   - List, delete, rename, and favorite macros.
   - Show macro steps before running.
@@ -30,8 +33,6 @@ Working list for future riptext improvements. Keep this practical: each item sho
 - [ ] Better picker UX
   - Category/recent/favorite grouping.
   - Show tags and aliases.
-- [ ] Script validation
-  - Detect missing metadata, duplicate slugs, invalid JSON metadata, and missing entrypoints.
 - [ ] Config file
   - Add `~/.riptext/config.toml` for user rips directory, default mode, keybindings, and display options.
 - [ ] More built-in rips
