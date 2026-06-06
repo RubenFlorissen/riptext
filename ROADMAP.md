@@ -44,7 +44,7 @@ Working list for future riptext improvements. Keep this practical: each item sho
   - Add maintainable visual indicators for marked ranges.
   - [x] Support macro chains over marked ranges without stale offsets.
 
-## Next
+## Deferred
 
-- [ ] Editor overlay range highlighting
-  - Revisit when Textual exposes a stable range decoration or overlay API for `TextArea`.
+- Editor overlay range highlighting
+  - Deferred until Textual exposes a stable range decoration or overlay API for `TextArea`.
