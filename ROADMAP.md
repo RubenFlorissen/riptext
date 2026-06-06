@@ -19,6 +19,16 @@ Working list for future riptext improvements. Keep this practical: each item sho
   - Show tags and aliases.
 - [x] Config file
   - Add `~/.riptext/config.toml` for user rips directory, default mode, keybindings, and display options.
+- [x] More built-in rips
+  - XML prettify/minify.
+  - HTML escape/unescape.
+  - JWT decode.
+  - UUID generate.
+  - Timestamp conversion.
+  - Regex extract/replace.
+  - Slugify.
+  - Strip HTML.
+  - Word wrap by width.
 - [x] Script validation
   - Detect missing metadata, duplicate slugs, invalid JSON metadata, and missing entrypoints.
   - Expose validation through the command palette.
@@ -35,14 +45,6 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 ## Next
 
-- [ ] More built-in rips
-  - XML prettify/minify.
+- [ ] YAML/JSON conversion
+  - Decide whether to add a YAML parser dependency or keep YAML conversion out of the dependency-free built-ins.
   - YAML/JSON conversion.
-  - HTML escape/unescape.
-  - JWT decode.
-  - UUID generate.
-  - Timestamp conversion.
-  - Regex extract/replace.
-  - Slugify.
-  - Strip HTML.
-  - Word wrap by width.
