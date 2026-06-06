@@ -17,6 +17,8 @@ Working list for future riptext improvements. Keep this practical: each item sho
 - [x] Better picker UX
   - Category/recent/favorite grouping.
   - Show tags and aliases.
+- [x] Config file
+  - Add `~/.riptext/config.toml` for user rips directory, default mode, keybindings, and display options.
 - [x] Script validation
   - Detect missing metadata, duplicate slugs, invalid JSON metadata, and missing entrypoints.
   - Expose validation through the command palette.
@@ -33,8 +35,6 @@ Working list for future riptext improvements. Keep this practical: each item sho
 
 ## Next
 
-- [ ] Config file
-  - Add `~/.riptext/config.toml` for user rips directory, default mode, keybindings, and display options.
 - [ ] More built-in rips
   - XML prettify/minify.
   - YAML/JSON conversion.

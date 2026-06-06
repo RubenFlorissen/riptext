@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from .app import run_app
+from .config import load_config
 
 
 def main() -> None:
@@ -14,6 +15,11 @@ def main() -> None:
         nargs="?",
         type=Path,
         help="Optional file to open and pre-populate the editor",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Optional config file path (defaults to ~/.riptext/config.toml)",
     )
     args = parser.parse_args()
 
@@ -29,4 +35,10 @@ def main() -> None:
             print(f"Error: File not found: {args.file}")
             raise SystemExit(1)
 
-    run_app(initial_text=initial_text, file_path=file_path, cwd=cwd)
+    config = load_config(args.config.expanduser() if args.config else None)
+    run_app(
+        initial_text=initial_text,
+        file_path=file_path,
+        cwd=cwd,
+        config=config,
+    )

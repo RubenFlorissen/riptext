@@ -129,6 +129,23 @@ def main(exec):
     exec.post_info("Done!")
 ```
 
+## Config
+
+Riptext loads `~/.riptext/config.toml` when present:
+
+```toml
+user_rips_dir = "~/.riptext/rips"
+default_mode = "full"  # full, lines, selection
+
+[display]
+show_line_numbers = true
+word_wrap = false
+
+[keybindings]
+open_palette = "ctrl+p"
+redo = "ctrl+shift+z"
+```
+
 ### Script API
 
 The `exec` object provides:

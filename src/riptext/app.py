@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Sequence, cast
 
 from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
 from textual.widgets import Input, Label, TextArea
 
 from .commands import RipCommandProvider
+from .config import RiptextConfig
 from .core.execution import run_script, run_script_sequence
 from .core.models import ScriptDiagnostic, ScriptMetadata, SelectionRange
 from .core.scripts import ScriptIndex, load_all_scripts, validate_scripts
@@ -40,6 +41,28 @@ from .selection import (
     normalize_ranges,
 )
 from .syntax import detect_language
+
+
+CONFIGURABLE_BINDINGS: dict[str, tuple[str, str]] = {
+    "open_palette": ("command_palette", "Open command palette"),
+    "run_last": ("run_last", "Run last"),
+    "cycle_mode": ("cycle_mode", "Cycle selection mode"),
+    "save": ("save", "Save file"),
+    "find": ("find", "Find"),
+    "goto_line": ("goto_line", "Go to line"),
+    "toggle_line_numbers": ("toggle_line_numbers", "Toggle line numbers"),
+    "toggle_word_wrap": ("toggle_word_wrap", "Toggle word wrap"),
+    "undo": ("undo_transform", "Undo transform"),
+    "redo": ("redo_transform", "Redo transform"),
+    "toggle_favorite": ("toggle_favorite", "Toggle favorite"),
+    "record_macro": ("start_macro", "Record/save macro"),
+    "mark_selection": ("mark_selection", "Mark selection"),
+    "clear_marked_selections": (
+        "clear_marked_selections",
+        "Clear marked selections",
+    ),
+    "quit": ("quit", "Quit"),
+}
 
 
 class RiptextApp(App):
@@ -91,9 +114,11 @@ class RiptextApp(App):
         initial_text: str | None = None,
         file_path: Path | None = None,
         cwd: Path | None = None,
+        config: RiptextConfig | None = None,
     ) -> None:
         super().__init__()
-        self._user_scripts_dir = user_scripts_dir
+        self._config = config or RiptextConfig()
+        self._user_scripts_dir = user_scripts_dir or self._config.user_rips_dir
         self._initial_text = initial_text
         self._file_path = file_path
         self._cwd = cwd or Path.cwd()
@@ -101,7 +126,7 @@ class RiptextApp(App):
         self._last_script: ScriptMetadata | None = None
         self._history = TransformHistory()
         self._debug_keys = os.environ.get("RIPTEXT_DEBUG_KEYS") == "1"
-        self._selection_mode: SelectionMode = "full"
+        self._selection_mode = cast(SelectionMode, self._config.default_mode)
         self._macro_recording: list[str] = []
         self._is_recording_macro = False
         self._macro_input_mode = "save"
@@ -130,9 +155,12 @@ class RiptextApp(App):
     def on_mount(self) -> None:
         self._reload_scripts()
         editor = self.query_one("#editor", TextArea)
+        editor.show_line_numbers = self._config.show_line_numbers
+        editor.soft_wrap = self._config.word_wrap
         if self._initial_text:
             editor.text = self._initial_text
         self._apply_syntax_highlighting(editor)
+        self._apply_config_keybindings()
         editor.focus()
         if os.environ.get("TERM_PROGRAM") == "vscode" or os.environ.get("VSCODE_PID"):
             self._set_status(
@@ -357,6 +385,15 @@ class RiptextApp(App):
         """Hide all overlay inputs."""
         for input_id in ["#save-input", "#find-input", "#goto-input", "#macro-input"]:
             self.query_one(input_id, Input).remove_class("visible")
+
+    def _apply_config_keybindings(self) -> None:
+        """Add configured key aliases for supported actions."""
+        for name, keys in self._config.keybindings.items():
+            binding = CONFIGURABLE_BINDINGS.get(name)
+            if binding is None:
+                continue
+            action, description = binding
+            self.bind(keys, action, description=description)
 
     def _do_find(self, query: str, editor: TextArea) -> None:
         """Find text in editor."""
@@ -935,6 +972,7 @@ def run_app(
     initial_text: str | None = None,
     file_path: Path | None = None,
     cwd: Path | None = None,
+    config: RiptextConfig | None = None,
 ) -> None:
     """Entry point to run the application."""
     RiptextApp(
@@ -942,4 +980,5 @@ def run_app(
         initial_text=initial_text,
         file_path=file_path,
         cwd=cwd,
+        config=config,
     ).run()
