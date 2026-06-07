@@ -82,6 +82,14 @@ def _apply_replacements(
     return "".join(parts)
 
 
+def _replace_range(
+    full_text: str,
+    current_range: SelectionRange,
+    replacement: str,
+) -> str:
+    return full_text[: current_range.start] + replacement + full_text[current_range.end :]
+
+
 def _run_module_on_range(
     module: ModuleType,
     full_text: str,
@@ -117,6 +125,7 @@ def _run_module_on_range(
             error_messages.append("Script has no main() or transform() entrypoint.")
     except Exception as exc:  # noqa: BLE001
         error_messages.append(f"Script error: {exc}")
+        replacement = None
 
     if replacement is None:
         replacement = execution.text
@@ -189,27 +198,27 @@ def run_script_sequence(
         except Exception as exc:  # noqa: BLE001
             error_messages.append(f"Failed to load script: {exc}")
 
-    ranges = sorted(
-        [selection.normalized() for selection in selections],
-        key=lambda selection: selection.start,
-        reverse=True,
-    )
+    selection_list = [selection.normalized() for selection in selections]
+    ranges = sorted(selection_list, key=lambda selection: selection.start, reverse=True)
     replacements: list[tuple[SelectionRange, str]] = []
     for current_range in ranges:
         target_text = full_text[current_range.start : current_range.end]
-        target_range = SelectionRange(0, len(target_text))
         for _, module in loaded_modules:
+            target_range = SelectionRange(
+                current_range.start,
+                current_range.start + len(target_text),
+            )
+            target_full_text = _replace_range(full_text, current_range, target_text)
             replacement = _run_module_on_range(
                 module,
-                target_text,
-                [],
-                False,
+                target_full_text,
+                selection_list,
+                True,
                 target_range,
                 info_messages,
                 error_messages,
             )
             target_text = replacement
-            target_range = SelectionRange(0, len(target_text))
         replacements.append((current_range, target_text))
 
     return _apply_replacements(full_text, replacements), info_messages, error_messages

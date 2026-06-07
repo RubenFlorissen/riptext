@@ -10,14 +10,31 @@ STATE_FILE = DEFAULT_STATE_DIR / "state.json"
 MAX_RECENT = 10
 
 
+def _default_state() -> dict:
+    return {"favorites": [], "recent": [], "favorite_macros": []}
+
+
+def _string_list(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
 def _load_state() -> dict:
     """Load state from disk."""
     if not STATE_FILE.exists():
-        return {"favorites": [], "recent": []}
+        return _default_state()
     try:
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return {"favorites": [], "recent": []}
+        return _default_state()
+    if not isinstance(state, dict):
+        return _default_state()
+    return {
+        "favorites": _string_list(state.get("favorites")),
+        "recent": _string_list(state.get("recent")),
+        "favorite_macros": _string_list(state.get("favorite_macros")),
+    }
 
 
 def _save_state(state: dict) -> None:

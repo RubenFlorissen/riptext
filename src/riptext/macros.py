@@ -75,6 +75,8 @@ def rename_macro(old_name: str, new_name: str) -> Path | None:
 
     data["name"] = new_name
     new_path = MACROS_DIR / f"{macro_slug(new_name)}.json"
+    if new_path != old_path and new_path.exists():
+        return None
     new_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     if new_path != old_path:
         old_path.unlink()

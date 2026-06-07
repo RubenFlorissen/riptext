@@ -61,6 +61,28 @@ class MacroPersistenceTests(unittest.TestCase):
 
         self.assertFalse(favorites.is_favorite_macro("pretty_json"))
 
+    def test_malformed_state_file_falls_back_to_empty_lists(self) -> None:
+        favorites.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        favorites.STATE_FILE.write_text("[]", encoding="utf-8")
+
+        self.assertEqual(favorites.get_favorites(), [])
+        self.assertEqual(favorites.get_recent(), [])
+        self.assertEqual(favorites.get_script_priority("trim"), (1, 999, 999))
+
+    def test_rename_macro_does_not_overwrite_existing_macro(self) -> None:
+        first_path = macros.save_macro("First Macro", ["trim"])
+        second_path = macros.save_macro("Second Macro", ["json_prettify"])
+
+        renamed_path = macros.rename_macro("First Macro", "Second Macro")
+
+        self.assertIsNone(renamed_path)
+        self.assertTrue(first_path.exists())
+        self.assertTrue(second_path.exists())
+        self.assertEqual(
+            [macro["name"] for macro in macros.list_macros()],
+            ["First Macro", "Second Macro"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

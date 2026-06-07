@@ -823,53 +823,33 @@ class RiptextApp(App):
             self._set_status(message, error=True, auto_clear=True)
             return
 
-        if self._marked_selections:
-            selections = get_selections(
-                editor,
-                self._selection_mode,
-                self._marked_selections,
-            )
-            marked_count = len(self._marked_selections)
-            new_text, _, errors = run_script_sequence(scripts, editor.text, selections)
-            self._applying_transform = True
-            try:
-                editor.text = new_text
-            finally:
-                self._applying_transform = False
+        selections = get_selections(
+            editor,
+            self._selection_mode,
+            self._marked_selections,
+        )
+        marked_count = len(self._marked_selections)
+        new_text, _, errors = run_script_sequence(scripts, editor.text, selections)
+        self._applying_transform = True
+        try:
+            editor.text = new_text
+        finally:
+            self._applying_transform = False
+
+        if marked_count:
             self._marked_selections = []
             self._update_marked_ranges_indicator()
-            label = macro_name or "Macro"
-            self._record_transform(label, slugs, before_text, new_text)
-            all_errors.extend(errors)
-            if all_errors:
-                self._set_status(all_errors[-1], error=True, auto_clear=True)
-            else:
-                label = f"'{macro_name}' " if macro_name else ""
-                self._set_status(
-                    f"Macro {label}complete: {self.macro_step_summary(slugs)} "
-                    f"on {marked_count} selections.",
-                    auto_clear=True,
-                )
-            return
-
-        for script in scripts:
-            selections = get_selections(editor, self._selection_mode)
-            new_text, _, errors = run_script(script, editor.text, selections)
-            self._applying_transform = True
-            try:
-                editor.text = new_text
-            finally:
-                self._applying_transform = False
-            all_errors.extend(errors)
 
         label = macro_name or "Macro"
-        self._record_transform(label, slugs, before_text, editor.text)
+        self._record_transform(label, slugs, before_text, new_text)
+        all_errors.extend(errors)
         if all_errors:
             self._set_status(all_errors[-1], error=True, auto_clear=True)
         else:
             label = f"'{macro_name}' " if macro_name else ""
+            target = f" on {marked_count} selections" if marked_count else ""
             self._set_status(
-                f"Macro {label}complete: {self.macro_step_summary(slugs)}.",
+                f"Macro {label}complete: {self.macro_step_summary(slugs)}{target}.",
                 auto_clear=True,
             )
 
