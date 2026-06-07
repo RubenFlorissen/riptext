@@ -62,6 +62,67 @@ def _load_module(script: ScriptMetadata) -> ModuleType:
     return module
 
 
+def _apply_replacements(
+    full_text: str,
+    replacements: list[tuple[SelectionRange, str]],
+) -> str:
+    if not replacements:
+        return full_text
+
+    parts: list[str] = []
+    cursor = 0
+    for current_range, replacement in sorted(
+        replacements,
+        key=lambda item: item[0].start,
+    ):
+        parts.append(full_text[cursor : current_range.start])
+        parts.append(replacement)
+        cursor = current_range.end
+    parts.append(full_text[cursor:])
+    return "".join(parts)
+
+
+def _run_module_on_range(
+    module: ModuleType,
+    full_text: str,
+    selection_list: list[SelectionRange],
+    is_selection: bool,
+    current_range: SelectionRange,
+    info_messages: list[str],
+    error_messages: list[str],
+) -> str:
+    replacement: str | None = None
+
+    def insert_sink(value: str) -> None:
+        nonlocal replacement
+        replacement = value
+
+    execution = ScriptExecution(
+        full_text=full_text,
+        selection=selection_list,
+        is_selection=is_selection,
+        _status_info=info_messages.append,
+        _status_error=error_messages.append,
+        _insert=insert_sink,
+        _active_range=current_range,
+    )
+
+    try:
+        if hasattr(module, "main"):
+            module.main(execution)
+        elif hasattr(module, "transform"):
+            result = module.transform(execution.text)
+            execution.insert(result)
+        else:
+            error_messages.append("Script has no main() or transform() entrypoint.")
+    except Exception as exc:  # noqa: BLE001
+        error_messages.append(f"Script error: {exc}")
+
+    if replacement is None:
+        replacement = execution.text
+    return replacement
+
+
 def run_script(
     script: ScriptMetadata,
     full_text: str,
@@ -84,44 +145,20 @@ def run_script(
     except Exception as exc:  # noqa: BLE001
         return full_text, info_messages, [f"Failed to load script: {exc}"]
 
+    replacements: list[tuple[SelectionRange, str]] = []
     for current_range in ranges:
-        replacement: str | None = None
-
-        def insert_sink(value: str) -> None:
-            nonlocal replacement
-            replacement = value
-
-        execution = ScriptExecution(
-            full_text=full_text,
-            selection=selection_list,
-            is_selection=is_selection,
-            _status_info=info_messages.append,
-            _status_error=error_messages.append,
-            _insert=insert_sink,
-            _active_range=current_range,
+        replacement = _run_module_on_range(
+            module,
+            full_text,
+            selection_list,
+            is_selection,
+            current_range,
+            info_messages,
+            error_messages,
         )
+        replacements.append((current_range, replacement))
 
-        try:
-            if hasattr(module, "main"):
-                module.main(execution)
-            elif hasattr(module, "transform"):
-                result = module.transform(execution.text)
-                execution.insert(result)
-            else:
-                error_messages.append("Script has no main() or transform() entrypoint.")
-        except Exception as exc:  # noqa: BLE001
-            error_messages.append(f"Script error: {exc}")
-
-        if replacement is None:
-            replacement = execution.text
-
-        full_text = (
-            full_text[: current_range.start]
-            + replacement
-            + full_text[current_range.end :]
-        )
-
-    return full_text, info_messages, error_messages
+    return _apply_replacements(full_text, replacements), info_messages, error_messages
 
 
 def run_script_sequence(
@@ -145,21 +182,34 @@ def run_script_sequence(
             error_messages.extend(errors)
         return full_text, info_messages, error_messages
 
+    loaded_modules: list[tuple[ScriptMetadata, ModuleType]] = []
+    for script in scripts:
+        try:
+            loaded_modules.append((script, _load_module(script)))
+        except Exception as exc:  # noqa: BLE001
+            error_messages.append(f"Failed to load script: {exc}")
+
     ranges = sorted(
         [selection.normalized() for selection in selections],
         key=lambda selection: selection.start,
         reverse=True,
     )
+    replacements: list[tuple[SelectionRange, str]] = []
     for current_range in ranges:
         target_text = full_text[current_range.start : current_range.end]
-        for script in scripts:
-            target_text, info, errors = run_script(script, target_text, [])
-            info_messages.extend(info)
-            error_messages.extend(errors)
-        full_text = (
-            full_text[: current_range.start]
-            + target_text
-            + full_text[current_range.end :]
-        )
+        target_range = SelectionRange(0, len(target_text))
+        for _, module in loaded_modules:
+            replacement = _run_module_on_range(
+                module,
+                target_text,
+                [],
+                False,
+                target_range,
+                info_messages,
+                error_messages,
+            )
+            target_text = replacement
+            target_range = SelectionRange(0, len(target_text))
+        replacements.append((current_range, target_text))
 
-    return full_text, info_messages, error_messages
+    return _apply_replacements(full_text, replacements), info_messages, error_messages

@@ -8,9 +8,9 @@ from typing import Iterable, Sequence, cast
 
 from textual.app import App, ComposeResult, SystemCommand
 from textual.binding import Binding
+from textual.css.query import NoMatches
 from textual.widgets import Input, Label, TextArea
 
-from .commands import RipCommandProvider
 from .config import RiptextConfig
 from .core.execution import run_script, run_script_sequence
 from .core.models import ScriptDiagnostic, ScriptMetadata, SelectionRange
@@ -42,6 +42,12 @@ from .selection import (
     offset_to_loc,
 )
 from .syntax import detect_language
+
+
+def get_rip_command_provider():
+    from .commands import RipCommandProvider
+
+    return RipCommandProvider
 
 
 CONFIGURABLE_BINDINGS: dict[str, tuple[str, str]] = {
@@ -85,7 +91,7 @@ class RiptextApp(App):
     #macro-input.visible { display: block; }
     """
 
-    COMMANDS = App.COMMANDS | {RipCommandProvider}
+    COMMANDS = App.COMMANDS | {get_rip_command_provider}
     COMMAND_PALETTE_BINDING = "ctrl+b"
 
     BINDINGS = [
@@ -149,15 +155,9 @@ class RiptextApp(App):
     def compose(self) -> ComposeResult:
         yield TextArea(id="editor", show_line_numbers=True)
         yield Label("", id="marked-ranges")
-        default_path = str(self._file_path or self._cwd / "untitled.txt")
-        yield Input(value=default_path, placeholder="File path to save...", id="save-input")
-        yield Input(placeholder="Find text...", id="find-input")
-        yield Input(placeholder="Go to line number...", id="goto-input")
-        yield Input(placeholder="Macro name (Enter to save)...", id="macro-input")
         yield Label("", id="status")
 
     def on_mount(self) -> None:
-        self._reload_scripts()
         editor = self.query_one("#editor", TextArea)
         editor.show_line_numbers = self._config.show_line_numbers
         editor.soft_wrap = self._config.word_wrap
@@ -184,8 +184,10 @@ class RiptextApp(App):
             self._set_status(f"Key: {event.key} {event.character or ''}".strip())
 
         # Handle Escape in overlay inputs
-        for input_id in ["#save-input", "#find-input", "#goto-input", "#macro-input"]:
-            inp = self.query_one(input_id, Input)
+        for input_id in ["save-input", "find-input", "goto-input", "macro-input"]:
+            inp = self._input_if_exists(input_id)
+            if inp is None:
+                continue
             if inp.has_class("visible") and event.key == "escape":
                 inp.remove_class("visible")
                 self.query_one("#editor", TextArea).focus()
@@ -348,8 +350,13 @@ class RiptextApp(App):
 
     def action_save(self) -> None:
         """Toggle save input visibility."""
+        default_path = str(self._file_path or self._cwd / "untitled.txt")
         toggle_save_input(
-            self.query_one("#save-input", Input),
+            self._get_or_create_input(
+                "save-input",
+                placeholder="File path to save...",
+                value=default_path,
+            ),
             self.query_one("#editor", TextArea),
             self._file_path,
             self._cwd,
@@ -360,7 +367,10 @@ class RiptextApp(App):
     def action_find(self) -> None:
         """Show find input."""
         self._hide_all_inputs()
-        find_input = self.query_one("#find-input", Input)
+        find_input = self._get_or_create_input(
+            "find-input",
+            placeholder="Find text...",
+        )
         find_input.value = ""
         find_input.add_class("visible")
         find_input.focus()
@@ -369,7 +379,10 @@ class RiptextApp(App):
     def action_goto_line(self) -> None:
         """Show go to line input."""
         self._hide_all_inputs()
-        goto_input = self.query_one("#goto-input", Input)
+        goto_input = self._get_or_create_input(
+            "goto-input",
+            placeholder="Go to line number...",
+        )
         goto_input.value = ""
         goto_input.add_class("visible")
         goto_input.focus()
@@ -391,8 +404,30 @@ class RiptextApp(App):
 
     def _hide_all_inputs(self) -> None:
         """Hide all overlay inputs."""
-        for input_id in ["#save-input", "#find-input", "#goto-input", "#macro-input"]:
-            self.query_one(input_id, Input).remove_class("visible")
+        for input_id in ["save-input", "find-input", "goto-input", "macro-input"]:
+            inp = self._input_if_exists(input_id)
+            if inp is not None:
+                inp.remove_class("visible")
+
+    def _input_if_exists(self, input_id: str) -> Input | None:
+        try:
+            return self.query_one(f"#{input_id}", Input)
+        except NoMatches:
+            return None
+
+    def _get_or_create_input(
+        self,
+        input_id: str,
+        *,
+        placeholder: str,
+        value: str = "",
+    ) -> Input:
+        existing = self._input_if_exists(input_id)
+        if existing is not None:
+            return existing
+        widget = Input(value=value, placeholder=placeholder, id=input_id)
+        self.mount(widget, before="#status")
+        return widget
 
     def _apply_config_keybindings(self) -> None:
         """Add configured key aliases for supported actions."""
@@ -467,7 +502,10 @@ class RiptextApp(App):
                 return
             # Show input to name the macro
             self._hide_all_inputs()
-            macro_input = self.query_one("#macro-input", Input)
+            macro_input = self._get_or_create_input(
+                "macro-input",
+                placeholder="Macro name (Enter to save)...",
+            )
             self._macro_input_mode = "save"
             self._macro_rename_target = None
             macro_input.value = ""
@@ -513,7 +551,10 @@ class RiptextApp(App):
         self._hide_all_inputs()
         self._macro_input_mode = "rename"
         self._macro_rename_target = macro
-        macro_input = self.query_one("#macro-input", Input)
+        macro_input = self._get_or_create_input(
+            "macro-input",
+            placeholder="Macro name (Enter to save)...",
+        )
         macro_input.value = macro["name"]
         macro_input.add_class("visible")
         macro_input.focus()
@@ -616,7 +657,7 @@ class RiptextApp(App):
 
     def action_reload_scripts(self) -> None:
         """Reload built-in and user scripts."""
-        self._reload_scripts()
+        self._reload_scripts(validate=True)
         script_count = len(self._index.scripts) if self._index else 0
         issue_count = len(self._script_diagnostics)
         if issue_count:
@@ -639,26 +680,31 @@ class RiptextApp(App):
     def action_create_user_rip(self) -> None:
         """Create a starter user rip template."""
         path = create_user_rip_template(self._user_scripts_dir)
-        self._reload_scripts()
+        self._reload_scripts(validate=True)
         self._set_status(f"Created rip template: {path}", auto_clear=10.0)
 
     # -------------------------------------------------------------------------
     # Scripts
     # -------------------------------------------------------------------------
 
-    def _reload_scripts(self) -> None:
+    def _reload_scripts(self, *, validate: bool = False) -> None:
         scripts = load_all_scripts(self._user_scripts_dir)
         self._index = ScriptIndex(scripts)
-        self._script_diagnostics = validate_scripts(self._user_scripts_dir)
-        self._script_issue_index = 0
+        if validate:
+            self._script_diagnostics = validate_scripts(self._user_scripts_dir)
+            self._script_issue_index = 0
 
-    def reload_scripts(self) -> None:
+    def _ensure_scripts_loaded(self) -> None:
+        if self._index is None:
+            self._reload_scripts()
+
+    def reload_scripts(self, *, validate: bool = False) -> None:
         """Public method for hot-reloading scripts."""
-        self._reload_scripts()
+        self._reload_scripts(validate=validate)
 
     def scripts_for_commands(self) -> list[ScriptMetadata]:
-        if not self._index:
-            return []
+        self._ensure_scripts_loaded()
+        assert self._index is not None
         return sorted(self._index.scripts, key=lambda s: s.name.lower())
 
     def transform_history_for_commands(self) -> list[TransformHistoryEntry]:
@@ -829,8 +875,8 @@ class RiptextApp(App):
 
     def _find_script_by_slug(self, slug: str) -> ScriptMetadata | None:
         """Find a script by slug."""
-        if not self._index:
-            return None
+        self._ensure_scripts_loaded()
+        assert self._index is not None
         for s in self._index.scripts:
             if s.slug == slug:
                 return s
